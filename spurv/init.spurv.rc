@@ -1,0 +1,23 @@
+on post-fs-data
+    setprop vold.post_fs_data_done 1
+    mkdir /data/vendor/var 0755 root root
+    mkdir /data/vendor/var/run 0755 root root
+    mkdir /data/vendor/var/run/netns 0755 root root
+    start dhcpclient_def
+
+on nonencrypted
+    start dhcpclient_def
+    setprop service.adb.tcp.port 5556
+    start adbd
+    #start spurv-logcat
+
+service spurv-logcat /system/bin/logcat *:W
+    user logd
+    group log
+    console
+    oneshot
+
+service dhcpclient_def /vendor/bin/dhcpclient -i host0
+    user root
+    group root
+    disabled

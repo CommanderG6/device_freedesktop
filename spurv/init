@@ -1,0 +1,15 @@
+#!/system/bin/sh
+PATH=$PATH:/system/bin
+
+export XDG_RUNTIME_DIR=/run/user/1000
+export WAYLAND_DISPLAY=wayland-0
+export ETNA_MESA_DEBUG=dbg_msgs
+export MESA_DEBUG=1
+export LIBGL_DEBUG=1
+export ST_DEBUG=mesa
+
+mount --bind /cmdline /proc/cmdline
+
+# Go to first stage now
+exec /init
+
