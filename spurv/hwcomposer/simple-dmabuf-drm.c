@@ -742,6 +742,10 @@ registry_handle_global(void *data, struct wl_registry *registry,
 		d->compositor =
 			wl_registry_bind(registry,
 					 id, &wl_compositor_interface, 1);
+	} else if (strcmp(interface, "wl_subcompositor") == 0) {
+		d->subcompositor =
+			wl_registry_bind(registry,
+					 id, &wl_subcompositor_interface, 1);
 	} else if (strcmp(interface, "zxdg_shell_v6") == 0) {
 		d->shell = wl_registry_bind(registry,
 					    id, &zxdg_shell_v6_interface, 1);

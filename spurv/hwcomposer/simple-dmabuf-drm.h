@@ -24,6 +24,7 @@ struct display {
 	struct wl_display *display;
 	struct wl_registry *registry;
 	struct wl_compositor *compositor;
+	struct wl_subcompositor *subcompositor;
 	struct wl_seat *seat;
 	struct wl_touch *touch;
 	struct zxdg_shell_v6 *shell;
@@ -83,6 +84,7 @@ struct buffer {
 };
 
 #define NUM_BUFFERS 1024
+#define NUM_SURFACES 128
 
 struct window {
 	struct display *display;
@@ -91,6 +93,9 @@ struct window {
 	struct zxdg_surface_v6 *xdg_surface;
 	struct zxdg_toplevel_v6 *xdg_toplevel;
 	struct buffer buffers[NUM_BUFFERS];
+   struct wl_surface *surfaces[NUM_SURFACES];
+   struct wl_subsurface *subsurfaces[NUM_SURFACES];
+
 	struct buffer *prev_buffer;
 	struct wl_callback *callback;
 	bool initialized;

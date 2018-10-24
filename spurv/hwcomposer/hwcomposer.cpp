@@ -48,6 +48,8 @@ struct spurv_hwc_composer_device_1 {
     int input_fd;
 };
 
+#define USE_SUBSURFACES 0
+
 static int hwc_prepare(hwc_composer_device_1_t* dev __unused,
                        size_t numDisplays, hwc_display_contents_1_t** displays) {
     //ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 1);
@@ -59,19 +61,99 @@ static int hwc_prepare(hwc_composer_device_1_t* dev __unused,
     if (!contents) return 0;
 
     for (size_t i = 0; i < contents->numHwLayers; i++) {
-        if (contents->hwLayers[i].compositionType == HWC_BACKGROUND) {
+        //ALOGE("*** %s: contents->hwLayers[i].compositionType %d", __PRETTY_FUNCTION__, contents->hwLayers[i].compositionType);
+#if USE_SUBSURFACES
+        if (contents->hwLayers[i].compositionType == HWC_FRAMEBUFFER)
+            contents->hwLayers[i].compositionType = HWC_OVERLAY;
+        else if (contents->hwLayers[i].compositionType == HWC_BACKGROUND)
             contents->hwLayers[i].compositionType = HWC_FRAMEBUFFER;
-        }
+#else
+        if (contents->hwLayers[i].compositionType == HWC_BACKGROUND)
+            contents->hwLayers[i].compositionType = HWC_FRAMEBUFFER;
+#endif
     }
 
     return 0;
+}
+
+static struct buffer *get_dmabuf_buffer(struct spurv_hwc_composer_device_1* pdev, struct gralloc_handle_t *drm_handle)
+{
+    struct buffer *buf = NULL;
+    static unsigned created_buffers = 0;
+    int ret = 0;
+
+    for (unsigned i = 0; i < created_buffers; i++) {
+        if (pdev->window->buffers[i].dmabuf_fd == drm_handle->prime_fd) {
+            buf = &pdev->window->buffers[i];
+            break;
+        }
+    }
+
+    //ALOGE("*** %s: %d prime_fd %d format %d stride %d width %d height %d usage %d modifier %" PRIu64, __PRETTY_FUNCTION__, 6, drm_handle->prime_fd, drm_handle->format, drm_handle->stride, drm_handle->width, drm_handle->height, drm_handle->usage, drm_handle->modifier);
+
+    //gralloc_gbm_bo_t *gbm_bo = drm_handle->data;
+
+    if (!buf) {
+        int drm_format;
+
+        assert(created_buffers < NUM_BUFFERS);
+        switch(drm_handle->format) {
+        case HAL_PIXEL_FORMAT_RGBA_8888:
+            drm_format = DRM_FORMAT_ABGR8888;
+            break;
+        case HAL_PIXEL_FORMAT_RGBX_8888:
+            drm_format = DRM_FORMAT_XRGB8888;
+            break;
+        default:
+            ALOGE("failed to convert Android format %d", drm_handle->format);
+            return NULL;
+        }
+        ret = create_dmabuf_buffer(pdev->display, &pdev->window->buffers[created_buffers], drm_handle->width, drm_handle->height, drm_format, 0, drm_handle->prime_fd, drm_handle->stride);
+        if (ret) {
+            ALOGE("failed to create a wayland dmabuf buffer");
+            return NULL;
+        }
+        buf = &pdev->window->buffers[created_buffers];
+        created_buffers++;
+    }
+
+    return buf;
+}
+
+static struct wl_surface *get_surface(struct spurv_hwc_composer_device_1* pdev, hwc_layer_1_t* layer, int pos)
+{
+    if (layer->compositionType == HWC_FRAMEBUFFER_TARGET)
+        return pdev->window->surface;
+
+    struct wl_surface *surface = NULL;
+    struct wl_subsurface *subsurface = NULL;
+    static unsigned created_surfaces = 0;
+    int ret = 0;
+
+    if (pos < created_surfaces) {
+        surface = pdev->window->surfaces[pos];
+        subsurface = pdev->window->subsurfaces[pos];
+    } else {
+        surface = wl_compositor_create_surface(pdev->display->compositor);
+        subsurface = wl_subcompositor_get_subsurface(pdev->display->subcompositor,
+							            surface,
+                                        pdev->window->surface);
+        pdev->window->surfaces[created_surfaces] = surface;
+        pdev->window->subsurfaces[created_surfaces] = subsurface;
+        created_surfaces++;
+    }
+
+    wl_subsurface_set_position(subsurface, layer->displayFrame.left, layer->displayFrame.top);
+    wl_subsurface_set_desync(subsurface);
+
+    return surface;
 }
 
 static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
                    hwc_display_contents_1_t** displays) {
 
     int ret;
-    struct ranchu_hwc_composer_device_1* pdev = (struct ranchu_hwc_composer_device_1*)dev;
+    struct spurv_hwc_composer_device_1* pdev = (struct spurv_hwc_composer_device_1*)dev;
 
     //ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 1);
     if (!numDisplays || !displays) {
@@ -84,9 +166,9 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
     int retireFenceFd = -1;
     int err = 0;
     for (size_t layer = 0; layer < contents->numHwLayers; layer++) {
-        ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 3);
         hwc_layer_1_t* fb_layer = &contents->hwLayers[layer];
-#if 0
+        //ALOGE("*** %s: fb_layer->compositionType %d", __PRETTY_FUNCTION__, fb_layer->compositionType);
+
         int releaseFenceFd = -1;
         if (fb_layer->compositionType == HWC_FRAMEBUFFER_TARGET) {
             if (fb_layer->acquireFenceFd > 0) {
@@ -107,56 +189,38 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
                 fb_layer->acquireFenceFd = -1;
             }
         }
-#endif
-        ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 4);
+
+        //ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 4);
+
+        if (fb_layer->compositionType != HWC_OVERLAY &&
+            fb_layer->compositionType != HWC_FRAMEBUFFER_TARGET) {
+             ALOGE("Unexpected layer with compositionType %d", fb_layer->compositionType);
+             continue;
+        }
+
         if (!fb_layer->handle) {
             continue;
         }
 
-        if (fb_layer->compositionType != HWC_FRAMEBUFFER_TARGET)
-            continue;
-
-        ALOGE("*** %s: %d handle %d", __PRETTY_FUNCTION__, 5, fb_layer->handle->data[0]);
-        struct buffer *buf = NULL;
+        //ALOGE("*** %s: %d handle %d", __PRETTY_FUNCTION__, 5, fb_layer->handle->data[0]);
         struct gralloc_handle_t *drm_handle = (struct gralloc_handle_t *)fb_layer->handle;
-        static unsigned created_buffers = 0;
-        for (int i = 0; i < created_buffers; i++) {
-            if (pdev->window->buffers[i].dmabuf_fd == drm_handle->prime_fd) {
-                buf = &pdev->window->buffers[i];
-                break;
-            }
-        }
-        ALOGE("*** %s: %d prime_fd %d format %d stride %d width %d height %d usage %d modifier %d compositionType %d", __PRETTY_FUNCTION__, 6, drm_handle->prime_fd, drm_handle->format, drm_handle->stride, drm_handle->width, drm_handle->height, drm_handle->usage, drm_handle->modifier, fb_layer->compositionType);
-        //gralloc_gbm_bo_t *gbm_bo = drm_handle->data;
+        struct buffer *buf = get_dmabuf_buffer(pdev, drm_handle);
         if (!buf) {
-            int drm_format;
-
-            assert(created_buffers < NUM_BUFFERS);
-            switch(drm_handle->format) {
-            case HAL_PIXEL_FORMAT_RGBA_8888:
-                drm_format = DRM_FORMAT_ARGB8888;
-                break;
-            case HAL_PIXEL_FORMAT_RGBX_8888:
-                drm_format = DRM_FORMAT_XRGB8888;
-                break;
-            default:
-                ALOGE("failed to convert Android format %d", drm_handle->format);
-                continue;
-            }
-		    ret = create_dmabuf_buffer(pdev->display, &pdev->window->buffers[created_buffers], drm_handle->width, drm_handle->height, drm_format, 0, drm_handle->prime_fd, drm_handle->stride);
-            if (ret) {
-                ALOGE("failed to create a wayland dmabuf buffer");
-                continue;
-            }
-            buf = &pdev->window->buffers[created_buffers];
-            created_buffers++;
+             ALOGE("Failed to get wl_dmabuf");
+             continue;
         }
 
-        wl_surface_attach(pdev->window->surface, buf->buffer, 0, 0);
-        wl_surface_damage(pdev->window->surface, 0, 0, pdev->window->width, pdev->window->height);
-        wl_surface_commit(pdev->window->surface);
+        struct wl_surface *surface = get_surface(pdev, fb_layer, layer);
+        if (!surface) {
+             ALOGE("Failed to get surface");
+             continue;
+        }
+
+        wl_surface_attach(surface, buf->buffer, 0, 0);
+        wl_surface_damage(surface, 0, 0, drm_handle->width, drm_handle->height);
+        wl_surface_commit(surface);
         wl_display_flush(pdev->display->display);
-#if 0
+
         if (fb_layer->compositionType == HWC_FRAMEBUFFER_TARGET) {
             fb_layer->releaseFenceFd = releaseFenceFd;
 
@@ -171,10 +235,9 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
                 }
             }
         }
-#endif
     }
 
-    //contents->retireFenceFd = retireFenceFd;
+    contents->retireFenceFd = retireFenceFd;
 
     return err;
 }
