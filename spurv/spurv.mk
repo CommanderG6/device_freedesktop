@@ -47,17 +47,19 @@ PRODUCT_COPY_FILES += \
     frameworks/native/data/etc/android.hardware.sensor.proximity.xml:system/etc/permissions/android.hardware.sensor.proximity.xml \
 
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
-    ro.sf.lcd_density=96 \
+    ro.sf.lcd_density=150 \
     ro.hardware.gralloc=gbm \
     ro.hardware.hwcomposer=spurv \
     ro.boot.hardware=spurv \
     ro.crypto.state=unsupported \
     ro.sys.sdcardfs=false \
     drm.gpu.vendor_name=etnaviv \
-    debug.sf.nobootanimation=1 \
     sys.init_log_level=7 \
     persist.logd.size=1024K \
+    debug.sf.nobootanimation=1 \
+    qemu.hw.mainkeys=1 \
 
 PRODUCT_PROPERTY_OVERRIDES += \
     dalvik.vm.usejit=false \
+    ro.radio.noril=yes \
 
