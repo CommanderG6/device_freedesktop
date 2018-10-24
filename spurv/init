@@ -10,6 +10,9 @@ export ST_DEBUG=mesa
 
 mount --bind /cmdline /proc/cmdline
 
+mkdir /dev/input
+chmod a+rwx /dev/input
+
 # Go to first stage now
 exec /init
 
