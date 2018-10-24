@@ -192,11 +192,17 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
 
         //ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 4);
 
+#if USE_SUBSURFACES
         if (fb_layer->compositionType != HWC_OVERLAY &&
             fb_layer->compositionType != HWC_FRAMEBUFFER_TARGET) {
              ALOGE("Unexpected layer with compositionType %d", fb_layer->compositionType);
              continue;
         }
+#else
+        if (fb_layer->compositionType != HWC_FRAMEBUFFER_TARGET) {
+             continue;
+        }
+#endif
 
         if (!fb_layer->handle) {
             continue;
