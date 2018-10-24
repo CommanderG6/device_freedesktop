@@ -24,13 +24,19 @@ struct display {
 	struct wl_display *display;
 	struct wl_registry *registry;
 	struct wl_compositor *compositor;
+	struct wl_seat *seat;
+	struct wl_touch *touch;
 	struct zxdg_shell_v6 *shell;
 	struct zwp_fullscreen_shell_v1 *fshell;
 	struct zwp_linux_dmabuf_v1 *dmabuf;
+
 	int xrgb8888_format_found;
 	int nv12_format_found;
 	uint64_t nv12_modifier;
 	int req_dmabuf_immediate;
+
+   struct wl_touch_listener *touch_listener;
+   void *touch_data;
 };
 
 struct drm_device {
@@ -97,7 +103,7 @@ create_dmabuf_buffer(struct display *display, struct buffer *buffer,
 		     int prime_fd, int stride);
 
 struct display *
-create_display();
+create_display(const struct wl_touch_listener *touch_listener, void *touch_data);
 
 struct window *
 create_window(struct display *display, int width, int height);

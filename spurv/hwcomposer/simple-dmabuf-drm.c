@@ -713,6 +713,26 @@ static const struct zxdg_shell_v6_listener xdg_shell_listener = {
 };
 
 static void
+seat_handle_capabilities(void *data, struct wl_seat *seat,
+			 enum wl_seat_capability caps)
+{
+	struct display *d = data;
+
+	if ((caps & WL_SEAT_CAPABILITY_TOUCH) && !d->touch) {
+		d->touch = wl_seat_get_touch(seat);
+		wl_touch_set_user_data(d->touch, d);
+		wl_touch_add_listener(d->touch, d->touch_listener, d->touch_data);
+	} else if (!(caps & WL_SEAT_CAPABILITY_TOUCH) && d->touch) {
+		wl_touch_destroy(d->touch);
+		d->touch = NULL;
+	}
+}
+
+static const struct wl_seat_listener seat_listener = {
+	seat_handle_capabilities,
+};
+
+static void
 registry_handle_global(void *data, struct wl_registry *registry,
 		       uint32_t id, const char *interface, uint32_t version)
 {
@@ -735,6 +755,10 @@ registry_handle_global(void *data, struct wl_registry *registry,
 		d->dmabuf = wl_registry_bind(registry,
 					     id, &zwp_linux_dmabuf_v1_interface, 3);
 		zwp_linux_dmabuf_v1_add_listener(d->dmabuf, &dmabuf_listener, d);
+	} else if (strcmp(interface, "wl_seat") == 0) {
+		d->seat = wl_registry_bind(registry, id,
+					   &wl_seat_interface, 1);
+		wl_seat_add_listener(d->seat, &seat_listener, d);
 	}
 }
 
@@ -750,7 +774,7 @@ static const struct wl_registry_listener registry_listener = {
 };
 
 struct display *
-create_display()
+create_display(const struct wl_touch_listener *touch_listener, void *touch_data)
 {
 	struct display *display;
 
@@ -763,6 +787,9 @@ create_display()
 	assert(display->display);
 
 	display->req_dmabuf_immediate = true;
+
+	display->touch_listener = touch_listener;
+	display->touch_data = touch_data;
 
 	display->registry = wl_display_get_registry(display->display);
 	wl_registry_add_listener(display->registry,

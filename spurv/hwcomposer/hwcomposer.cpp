@@ -21,6 +21,9 @@
 #include <sys/resource.h>
 #include <unistd.h>
 #include <wayland-client.h>
+#include <linux/input.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 #include <log/log.h>
 #include <hardware/hwcomposer.h>
@@ -31,16 +34,18 @@
 
 #include "simple-dmabuf-drm.h"
 
-struct ranchu_hwc_composer_device_1 {
+struct spurv_hwc_composer_device_1 {
     hwc_composer_device_1_t base; // constant after init
     const hwc_procs_t *procs;     // constant after init
-    pthread_t vsync_thread;       // constant after init
+    pthread_t wayland_thread;     // constant after init
     int32_t vsync_period_ns;      // constant after init
     struct display *display;      // constant after init
     struct window *window;        // constant after init
 
     pthread_mutex_t vsync_lock;
     bool vsync_callback_enabled; // protected by this->vsync_lock
+
+    int input_fd;
 };
 
 static int hwc_prepare(hwc_composer_device_1_t* dev __unused,
@@ -175,8 +180,8 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
 }
 
 static int hwc_query(struct hwc_composer_device_1* dev, int what, int* value) {
-    struct ranchu_hwc_composer_device_1* pdev =
-            (struct ranchu_hwc_composer_device_1*)dev;
+    struct spurv_hwc_composer_device_1* pdev =
+            (struct spurv_hwc_composer_device_1*)dev;
 
     ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 1);
     switch (what) {
@@ -199,15 +204,15 @@ static int hwc_event_control(struct hwc_composer_device_1* dev, int dpy __unused
                              int event, int enabled) {
     ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 1);
 #if 0
-    struct ranchu_hwc_composer_device_1* pdev =
-            (struct ranchu_hwc_composer_device_1*)dev;
+    struct spurv_hwc_composer_device_1* pdev =
+            (struct spurv_hwc_composer_device_1*)dev;
     int ret = -EINVAL;
 
     // enabled can only be 0 or 1
     if (!(enabled & ~1)) {
         if (event == HWC_EVENT_VSYNC) {
             pthread_mutex_lock(&pdev->vsync_lock);
-            pdev->vsync_callback_enabled=enabled;
+            pdev->vsync_callback_enabled = enabled;
             pthread_mutex_unlock(&pdev->vsync_lock);
             ret = 0;
         }
@@ -252,7 +257,7 @@ static int hwc_get_display_configs(struct hwc_composer_device_1* dev __unused,
 }
 
 
-static int32_t hwc_attribute(struct ranchu_hwc_composer_device_1* pdev,
+static int32_t hwc_attribute(struct spurv_hwc_composer_device_1* pdev,
                              const uint32_t attribute) {
     ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 1);
     switch(attribute) {
@@ -277,7 +282,7 @@ static int32_t hwc_attribute(struct ranchu_hwc_composer_device_1* pdev,
 static int hwc_get_display_attributes(struct hwc_composer_device_1* dev __unused,
                                       int disp, uint32_t config __unused,
                                       const uint32_t* attributes, int32_t* values) {
-    struct ranchu_hwc_composer_device_1* pdev = (struct ranchu_hwc_composer_device_1*)dev;
+    struct spurv_hwc_composer_device_1* pdev = (struct spurv_hwc_composer_device_1*)dev;
     ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 1);
     for (int i = 0; attributes[i] != HWC_DISPLAY_NO_ATTRIBUTE; i++) {
         if (disp == HWC_DISPLAY_PRIMARY) {
@@ -296,21 +301,168 @@ static int hwc_get_display_attributes(struct hwc_composer_device_1* dev __unused
 
 static int hwc_close(hw_device_t* dev) {
     ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 1);
-#if 0
-    struct ranchu_hwc_composer_device_1* pdev = (struct ranchu_hwc_composer_device_1*)dev;
-    pthread_kill(pdev->vsync_thread, SIGTERM);
-    pthread_join(pdev->vsync_thread, NULL);
-#endif
+
+    struct spurv_hwc_composer_device_1* pdev = (struct spurv_hwc_composer_device_1*)dev;
+    pthread_kill(pdev->wayland_thread, SIGTERM);
+    pthread_join(pdev->wayland_thread, NULL);
+
     free(dev);
     return 0;
 }
 
-static void* hwc_vsync_thread(void* data) {
+#define INPUT_PIPE_NAME "/dev/input/wayland_events"
+
+static int
+ensure_pipe(struct spurv_hwc_composer_device_1* pdev)
+{
+    if (pdev->input_fd == -1) {
+        pdev->input_fd = open(INPUT_PIPE_NAME, O_WRONLY | O_NONBLOCK);
+        if (pdev->input_fd == -1) {
+            ALOGE("Failed to open pipe to InputFlinger: %s", strerror(errno));
+            return -1;
+        }
+    }
+    return 0;
+}
+
+#define ADD_EVENT(time_, type_, code_, value_)     \
+    event[n].time.tv_sec = time_ / 1000;           \
+    event[n].time.tv_usec = (time_ % 1000) * 1000; \
+    event[n].type = type_;                         \
+    event[n].code = code_;                         \
+    event[n].value = value_;                       \
+    n++;
+
+static void
+touch_handle_down(void *data, struct wl_touch *wl_touch,
+		  uint32_t serial, uint32_t time, struct wl_surface *surface,
+		  int32_t id, wl_fixed_t x_w, wl_fixed_t y_w)
+{
+    struct spurv_hwc_composer_device_1* pdev = (struct spurv_hwc_composer_device_1*)data;
+    struct input_event event[6];
+    int res, n = 0;
+
+    if (ensure_pipe(pdev))
+        return;
+
+    ADD_EVENT(time, EV_ABS, ABS_MT_SLOT, id);
+    ADD_EVENT(time, EV_ABS, ABS_MT_TRACKING_ID, id);
+    ADD_EVENT(time, EV_ABS, ABS_MT_POSITION_X, wl_fixed_to_int(x_w));
+    ADD_EVENT(time, EV_ABS, ABS_MT_POSITION_Y, wl_fixed_to_int(y_w));
+    ADD_EVENT(time, EV_ABS, ABS_MT_PRESSURE, 50);
+    ADD_EVENT(time, EV_SYN, SYN_REPORT, 0);
+
+    res = write(pdev->input_fd, &event, sizeof(event));
+    if (res < sizeof(event))
+        ALOGE("Failed to write event for InputFlinger: %s", strerror(errno));
+}
+
+static void
+touch_handle_up(void *data, struct wl_touch *wl_touch,
+		uint32_t serial, uint32_t time, int32_t id)
+{
+    struct spurv_hwc_composer_device_1* pdev = (struct spurv_hwc_composer_device_1*)data;
+    struct input_event event[4];
+    int res, n = 0;
+
+    if (ensure_pipe(pdev))
+        return;
+
+    ADD_EVENT(time, EV_ABS, ABS_MT_SLOT, id);
+    ADD_EVENT(time, EV_ABS, ABS_MT_TRACKING_ID, -1);
+    ADD_EVENT(time, EV_SYN, SYN_REPORT, 0);
+
+    res = write(pdev->input_fd, &event, sizeof(event));
+    if (res < sizeof(event))
+        ALOGE("Failed to write event for InputFlinger: %s", strerror(errno));
+}
+
+static void
+touch_handle_motion(void *data, struct wl_touch *wl_touch,
+		    uint32_t time, int32_t id, wl_fixed_t x_w, wl_fixed_t y_w)
+{
+    struct spurv_hwc_composer_device_1* pdev = (struct spurv_hwc_composer_device_1*)data;
+    struct input_event event[6];
+    int res, n = 0;
+
+    if (ensure_pipe(pdev))
+        return;
+
+    ADD_EVENT(time, EV_ABS, ABS_MT_SLOT, id);
+    ADD_EVENT(time, EV_ABS, ABS_MT_TRACKING_ID, id);
+    ADD_EVENT(time, EV_ABS, ABS_MT_POSITION_X, wl_fixed_to_int(x_w));
+    ADD_EVENT(time, EV_ABS, ABS_MT_POSITION_Y, wl_fixed_to_int(y_w));
+    ADD_EVENT(time, EV_ABS, ABS_MT_PRESSURE, 50);
+    ADD_EVENT(time, EV_SYN, SYN_REPORT, 0);
+
+    res = write(pdev->input_fd, &event, sizeof(event));
+    if (res < sizeof(event))
+        ALOGE("Failed to write event for InputFlinger: %s", strerror(errno));
+}
+
+static void
+touch_handle_frame(void *data, struct wl_touch *wl_touch)
+{
+}
+
+static void
+touch_handle_cancel(void *data, struct wl_touch *wl_touch)
+{
+}
+
+static void
+touch_handle_shape(void *data, struct wl_touch *wl_touch, int32_t id, wl_fixed_t major, wl_fixed_t minor)
+{
+    struct spurv_hwc_composer_device_1* pdev = (struct spurv_hwc_composer_device_1*)data;
+    struct input_event event[6];
+    int res, n = 0;
+
+    if (ensure_pipe(pdev))
+        return;
+
+    ADD_EVENT(0, EV_ABS, ABS_MT_SLOT, id);
+    ADD_EVENT(0, EV_ABS, ABS_MT_TRACKING_ID, id);
+    ADD_EVENT(0, EV_ABS, ABS_MT_TOUCH_MAJOR, wl_fixed_to_int(major));
+    ADD_EVENT(0, EV_ABS, ABS_MT_TOUCH_MINOR, wl_fixed_to_int(minor));
+    ADD_EVENT(0, EV_SYN, SYN_REPORT, 0);
+
+    res = write(pdev->input_fd, &event, sizeof(event));
+    if (res < sizeof(event))
+        ALOGE("Failed to write event for InputFlinger: %s", strerror(errno));
+}
+
+static void
+touch_handle_orientation(void *data, struct wl_touch *wl_touch, int32_t id, wl_fixed_t orientation)
+{
+}
+
+static const struct wl_touch_listener touch_listener = {
+	touch_handle_down,
+	touch_handle_up,
+	touch_handle_motion,
+	touch_handle_frame,
+	touch_handle_cancel,
+	touch_handle_shape,
+	touch_handle_orientation,
+};
+
+static void* hwc_wayland_thread(void* data) {
+    struct spurv_hwc_composer_device_1* pdev = (struct spurv_hwc_composer_device_1*)data;
+    int ret = 0;
+
     ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 1);
-#if 0
-    struct ranchu_hwc_composer_device_1* pdev = (struct ranchu_hwc_composer_device_1*)data;
+
     setpriority(PRIO_PROCESS, 0, HAL_PRIORITY_URGENT_DISPLAY);
 
+    while (ret != -1)
+        ret = wl_display_dispatch(pdev->display->display);
+
+    ALOGE("*** %s: Wayland client was disconnected: %s", __PRETTY_FUNCTION__, strerror(ret));
+
+    return NULL;
+}
+
+#if 0
     struct timespec rt;
     if (clock_gettime(CLOCK_MONOTONIC, &rt) == -1) {
         ALOGE("%s:%d error in vsync thread clock_gettime: %s",
@@ -357,15 +509,47 @@ static void* hwc_vsync_thread(void* data) {
         ++sent;
     }
 #endif
-    return NULL;
-}
-
 static void hwc_register_procs(struct hwc_composer_device_1* dev,
                                hwc_procs_t const* procs) {
-    struct ranchu_hwc_composer_device_1* pdev = (struct ranchu_hwc_composer_device_1*)dev;
+    struct spurv_hwc_composer_device_1* pdev = (struct spurv_hwc_composer_device_1*)dev;
     pdev->procs = procs;
 }
+#if 0
+#define INPUT_SOCKET_NAME "/dev/input/wayland_events"
 
+static int create_input_socket(spurv_hwc_composer_device_1 *pdev)
+{
+    int conn, fd, ret;
+    struct sockaddr_un addr = {0,};
+
+    unlink(INPUT_SOCKET_NAME);
+
+    conn = socket(AF_UNIX, SOCK_SEQPACKET, 0);
+    if (conn == -1) {
+        return conn;
+    }
+
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, INPUT_SOCKET_NAME, sizeof(addr.sun_path) - 1);
+
+    ret = bind(conn, (const struct sockaddr *) &addr, sizeof(struct sockaddr_un));
+    if (ret == -1) {
+        return ret;
+    }
+
+    ret = listen(connection_socket, 1);
+    if (ret == -1) {
+        return ret;
+    }
+
+    fd = accept(conn, NULL, NULL);
+    if (fd == -1) {
+        return fd;
+    }
+
+    return 0;
+}
+#endif
 static int hwc_open(const struct hw_module_t* module, const char* name,
                     struct hw_device_t** device) {
     int ret = 0;
@@ -375,7 +559,7 @@ static int hwc_open(const struct hw_module_t* module, const char* name,
         return -EINVAL;
     }
 
-    ranchu_hwc_composer_device_1 *pdev = new ranchu_hwc_composer_device_1();
+    spurv_hwc_composer_device_1 *pdev = new spurv_hwc_composer_device_1();
     if (!pdev) {
         ALOGE("%s failed to allocate dev", __FUNCTION__);
         return -ENOMEM;
@@ -397,9 +581,10 @@ static int hwc_open(const struct hw_module_t* module, const char* name,
     pdev->base.getDisplayAttributes = hwc_get_display_attributes;
 
     pdev->vsync_period_ns = 1000*1000*1000/60; // vsync is 60 hz
+    pdev->input_fd = -1;
 
     setenv("XDG_RUNTIME_DIR", "/run/user/1000", 1);
-    pdev->display = create_display();
+    pdev->display = create_display(&touch_listener, pdev);
     pdev->display->req_dmabuf_immediate = true;
     if (!pdev->display) {
         ALOGE("failed to open wayland connection");
@@ -423,29 +608,35 @@ static int hwc_open(const struct hw_module_t* module, const char* name,
 	    wl_surface_commit(pdev->window->surface);
     }
 #endif
-	//while (running && ret != -1)
-	//	ret = wl_display_dispatch(display->display);
-   
+#if 0
+    /* We'll block here until InputFlinger connects */
+    ret = create_input_socket(pdev);
+    if (ret != 0) {
+        ALOGE("Failed to create socket for input events");
+        return ret;
+    }
+#endif
 /*
     hw_module_t const* hw_module;
     ret = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &hw_module);
     if (ret != 0) {
-        ALOGE("ranchu_hw_composer hwc_open %s module not found", GRALLOC_HARDWARE_MODULE_ID);
+        ALOGE("spurv_hw_composer hwc_open %s module not found", GRALLOC_HARDWARE_MODULE_ID);
         return ret;
     }
     ret = framebuffer_open(hw_module, &pdev->fbdev);
     if (ret != 0) {
-        ALOGE("ranchu_hw_composer hwc_open could not open framebuffer");
+        ALOGE("spurv_hw_composer hwc_open could not open framebuffer");
     }
+*/
 
     pthread_mutex_init(&pdev->vsync_lock, NULL);
     pdev->vsync_callback_enabled = false;
 
-    ret = pthread_create (&pdev->vsync_thread, NULL, hwc_vsync_thread, pdev);
+    ret = pthread_create (&pdev->wayland_thread, NULL, hwc_wayland_thread, pdev);
     if (ret) {
-        ALOGE("ranchu_hw_composer could not start vsync_thread\n");
+        ALOGE("spurv_hw_composer could not start wayland_thread\n");
     }
-*/
+
     *device = &pdev->base.common;
 
     return ret;
