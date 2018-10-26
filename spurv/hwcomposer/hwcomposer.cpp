@@ -52,8 +52,6 @@ struct spurv_hwc_composer_device_1 {
 
 static int hwc_prepare(hwc_composer_device_1_t* dev __unused,
                        size_t numDisplays, hwc_display_contents_1_t** displays) {
-    //ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 1);
-
     if (!numDisplays || !displays) return 0;
 
     hwc_display_contents_1_t* contents = displays[HWC_DISPLAY_PRIMARY];
@@ -65,11 +63,9 @@ static int hwc_prepare(hwc_composer_device_1_t* dev __unused,
 #if USE_SUBSURFACES
         if (contents->hwLayers[i].compositionType == HWC_FRAMEBUFFER)
             contents->hwLayers[i].compositionType = HWC_OVERLAY;
-        else if (contents->hwLayers[i].compositionType == HWC_BACKGROUND)
-            contents->hwLayers[i].compositionType = HWC_FRAMEBUFFER;
 #else
-        if (contents->hwLayers[i].compositionType == HWC_BACKGROUND)
-            contents->hwLayers[i].compositionType = HWC_FRAMEBUFFER;
+        if (contents->hwLayers[i].compositionType == HWC_FRAMEBUFFER)
+            contents->hwLayers[i].compositionType = HWC_OVERLAY;
 #endif
     }
 
@@ -122,6 +118,10 @@ static struct buffer *get_dmabuf_buffer(struct spurv_hwc_composer_device_1* pdev
 
 static struct wl_surface *get_surface(struct spurv_hwc_composer_device_1* pdev, hwc_layer_1_t* layer, int pos)
 {
+#if !USE_SUBSURFACES
+    return pdev->window->surface;
+#endif
+
     if (layer->compositionType == HWC_FRAMEBUFFER_TARGET)
         return pdev->window->surface;
 
@@ -167,8 +167,13 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
     int err = 0;
     for (size_t layer = 0; layer < contents->numHwLayers; layer++) {
         hwc_layer_1_t* fb_layer = &contents->hwLayers[layer];
-        //ALOGE("*** %s: fb_layer->compositionType %d", __PRETTY_FUNCTION__, fb_layer->compositionType);
+        struct gralloc_handle_t *drm_handle2 = (struct gralloc_handle_t *)fb_layer->handle;
 
+#if 0
+        ALOGE("*** %s: composition %d %dx%d flags %x hints %x transform %x blending %x", __PRETTY_FUNCTION__, fb_layer->compositionType,
+              drm_handle2 ? drm_handle2->width : 0, drm_handle2 ? drm_handle2->height : 0,
+              fb_layer->flags, fb_layer->hints, fb_layer->transform, fb_layer->blending);
+#endif
         int releaseFenceFd = -1;
         if (fb_layer->compositionType == HWC_FRAMEBUFFER_TARGET) {
             if (fb_layer->acquireFenceFd > 0) {
@@ -199,7 +204,7 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
              continue;
         }
 #else
-        if (fb_layer->compositionType != HWC_FRAMEBUFFER_TARGET) {
+        if (fb_layer->compositionType != HWC_OVERLAY || fb_layer->blending != HWC_BLENDING_NONE) {
              continue;
         }
 #endif
