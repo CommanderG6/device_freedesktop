@@ -149,6 +149,33 @@ static struct wl_surface *get_surface(struct spurv_hwc_composer_device_1* pdev, 
     return surface;
 }
 
+static void
+frame(void *data, struct wl_callback *callback, uint32_t time)
+{
+    struct spurv_hwc_composer_device_1* pdev = (struct spurv_hwc_composer_device_1*)data;
+    bool vsync_enabled;
+    struct timespec rt;
+
+    pthread_mutex_lock(&pdev->vsync_lock);
+    vsync_enabled = pdev->vsync_callback_enabled;
+    pthread_mutex_unlock(&pdev->vsync_lock);
+
+    if (!vsync_enabled)
+        return;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &rt) == -1) {
+       ALOGE("%s:%d error in vsync thread clock_gettime: %s",
+            __FILE__, __LINE__, strerror(errno));
+    }
+
+    int64_t timestamp = int64_t(rt.tv_sec) * 1e9 + rt.tv_nsec;
+    pdev->procs->vsync(pdev->procs, 0, timestamp);
+}
+
+static const struct wl_callback_listener frame_listener = {
+	frame
+};
+
 static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
                    hwc_display_contents_1_t** displays) {
 
@@ -229,6 +256,11 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
 
         wl_surface_attach(surface, buf->buffer, 0, 0);
         wl_surface_damage(surface, 0, 0, drm_handle->width, drm_handle->height);
+
+        wl_callback_destroy(pdev->window->callback);
+        pdev->window->callback = wl_surface_frame(pdev->window->surface);
+        wl_callback_add_listener(pdev->window->callback, &frame_listener, pdev);
+
         wl_surface_commit(surface);
         wl_display_flush(pdev->display->display);
 
@@ -276,8 +308,6 @@ static int hwc_query(struct hwc_composer_device_1* dev, int what, int* value) {
 
 static int hwc_event_control(struct hwc_composer_device_1* dev, int dpy __unused,
                              int event, int enabled) {
-    ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 1);
-#if 0
     struct spurv_hwc_composer_device_1* pdev =
             (struct spurv_hwc_composer_device_1*)dev;
     int ret = -EINVAL;
@@ -292,8 +322,6 @@ static int hwc_event_control(struct hwc_composer_device_1* dev, int dpy __unused
         }
     }
     return ret;
-#endif
-    return 0;
 }
 
 static int hwc_blank(struct hwc_composer_device_1* dev __unused, int disp,
@@ -536,94 +564,12 @@ static void* hwc_wayland_thread(void* data) {
     return NULL;
 }
 
-#if 0
-    struct timespec rt;
-    if (clock_gettime(CLOCK_MONOTONIC, &rt) == -1) {
-        ALOGE("%s:%d error in vsync thread clock_gettime: %s",
-              __FILE__, __LINE__, strerror(errno));
-    }
-    const int log_interval = 60;
-    int64_t last_logged = rt.tv_sec;
-    int sent = 0;
-    int last_sent = 0;
-    bool vsync_enabled = false;
-    struct timespec wait_time;
-    wait_time.tv_sec = 0;
-    wait_time.tv_nsec = pdev->vsync_period_ns;
-
-    while (true) {
-        int err = nanosleep(&wait_time, NULL);
-        if (err == -1) {
-            if (errno == EINTR) {
-                break;
-            }
-            ALOGE("error in vsync thread: %s", strerror(errno));
-        }
-
-        pthread_mutex_lock(&pdev->vsync_lock);
-        vsync_enabled = pdev->vsync_callback_enabled;
-        pthread_mutex_unlock(&pdev->vsync_lock);
-
-        if (!vsync_enabled) {
-            continue;
-        }
-
-        if (clock_gettime(CLOCK_MONOTONIC, &rt) == -1) {
-            ALOGE("%s:%d error in vsync thread clock_gettime: %s",
-                  __FILE__, __LINE__, strerror(errno));
-        }
-
-        int64_t timestamp = int64_t(rt.tv_sec) * 1e9 + rt.tv_nsec;
-        pdev->procs->vsync(pdev->procs, 0, timestamp);
-        if (rt.tv_sec - last_logged >= log_interval) {
-            ALOGD("hw_composer sent %d syncs in %ds", sent - last_sent, rt.tv_sec - last_logged);
-            last_logged = rt.tv_sec;
-            last_sent = sent;
-        }
-        ++sent;
-    }
-#endif
 static void hwc_register_procs(struct hwc_composer_device_1* dev,
                                hwc_procs_t const* procs) {
     struct spurv_hwc_composer_device_1* pdev = (struct spurv_hwc_composer_device_1*)dev;
     pdev->procs = procs;
 }
-#if 0
-#define INPUT_SOCKET_NAME "/dev/input/wayland_events"
 
-static int create_input_socket(spurv_hwc_composer_device_1 *pdev)
-{
-    int conn, fd, ret;
-    struct sockaddr_un addr = {0,};
-
-    unlink(INPUT_SOCKET_NAME);
-
-    conn = socket(AF_UNIX, SOCK_SEQPACKET, 0);
-    if (conn == -1) {
-        return conn;
-    }
-
-    addr.sun_family = AF_UNIX;
-    strncpy(addr.sun_path, INPUT_SOCKET_NAME, sizeof(addr.sun_path) - 1);
-
-    ret = bind(conn, (const struct sockaddr *) &addr, sizeof(struct sockaddr_un));
-    if (ret == -1) {
-        return ret;
-    }
-
-    ret = listen(connection_socket, 1);
-    if (ret == -1) {
-        return ret;
-    }
-
-    fd = accept(conn, NULL, NULL);
-    if (fd == -1) {
-        return fd;
-    }
-
-    return 0;
-}
-#endif
 static int hwc_open(const struct hw_module_t* module, const char* name,
                     struct hw_device_t** device) {
     int ret = 0;
@@ -675,36 +621,13 @@ static int hwc_open(const struct hw_module_t* module, const char* name,
 	/* Here we retrieve the linux-dmabuf objects if executed without immed,
 	 * or error */
 	wl_display_roundtrip(pdev->display->display);
-#if 0
-	if (!pdev->window->wait_for_configure) {
-	    pdev->window->callback = wl_surface_frame(pdev->window->surface);
-	    wl_callback_add_listener(pdev->window->callback, &frame_listener, pdev->window);
-	    wl_surface_commit(pdev->window->surface);
-    }
-#endif
-#if 0
-    /* We'll block here until InputFlinger connects */
-    ret = create_input_socket(pdev);
-    if (ret != 0) {
-        ALOGE("Failed to create socket for input events");
-        return ret;
-    }
-#endif
-/*
-    hw_module_t const* hw_module;
-    ret = hw_get_module(GRALLOC_HARDWARE_MODULE_ID, &hw_module);
-    if (ret != 0) {
-        ALOGE("spurv_hw_composer hwc_open %s module not found", GRALLOC_HARDWARE_MODULE_ID);
-        return ret;
-    }
-    ret = framebuffer_open(hw_module, &pdev->fbdev);
-    if (ret != 0) {
-        ALOGE("spurv_hw_composer hwc_open could not open framebuffer");
-    }
-*/
+
+   pdev->window->callback = wl_surface_frame(pdev->window->surface);
+   wl_callback_add_listener(pdev->window->callback, &frame_listener, pdev);
+   wl_surface_commit(pdev->window->surface);
 
     pthread_mutex_init(&pdev->vsync_lock, NULL);
-    pdev->vsync_callback_enabled = false;
+    pdev->vsync_callback_enabled = true;
 
     ret = pthread_create (&pdev->wayland_thread, NULL, hwc_wayland_thread, pdev);
     if (ret) {
