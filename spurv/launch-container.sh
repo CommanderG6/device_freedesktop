@@ -21,5 +21,6 @@ systemd-nspawn --boot \
                --bind /dev/urandom:/dev/hw_random \
                --bind /sys \
                --bind /run/user/1000/wayland-0 \
-               --network-zone=aosp \
                --directory `dirname "$0"`
+
+# --network-zone=aosp
