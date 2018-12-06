@@ -26,6 +26,7 @@
 #include <sys/un.h>
 
 #include <log/log.h>
+#include <cutils/properties.h>
 #include <hardware/hwcomposer.h>
 #include <sync/sync.h>
 #include <drm_fourcc.h>
@@ -49,6 +50,8 @@ struct spurv_hwc_composer_device_1 {
 };
 
 #define USE_SUBSURFACES 0
+#define EMIT_VSYNC 0
+#define FENCES 1
 
 static int hwc_prepare(hwc_composer_device_1_t* dev __unused,
                        size_t numDisplays, hwc_display_contents_1_t** displays) {
@@ -60,6 +63,11 @@ static int hwc_prepare(hwc_composer_device_1_t* dev __unused,
 
     for (size_t i = 0; i < contents->numHwLayers; i++) {
         //ALOGE("*** %s: contents->hwLayers[i].compositionType %d", __PRETTY_FUNCTION__, contents->hwLayers[i].compositionType);
+        if (contents->hwLayers[i].compositionType == HWC_FRAMEBUFFER_TARGET)
+            continue;
+        if (contents->hwLayers[i].flags & HWC_SKIP_LAYER)
+            continue;
+
 #if USE_SUBSURFACES
         if (contents->hwLayers[i].compositionType == HWC_FRAMEBUFFER)
             contents->hwLayers[i].compositionType = HWC_OVERLAY;
@@ -85,7 +93,7 @@ static struct buffer *get_dmabuf_buffer(struct spurv_hwc_composer_device_1* pdev
         }
     }
 
-    //ALOGE("*** %s: %d prime_fd %d format %d stride %d width %d height %d usage %d modifier %" PRIu64, __PRETTY_FUNCTION__, 6, drm_handle->prime_fd, drm_handle->format, drm_handle->stride, drm_handle->width, drm_handle->height, drm_handle->usage, drm_handle->modifier);
+    ///ALOGE("*** %s: %d prime_fd %d format %d stride %d width %d height %d usage %d modifier %" PRIu64, __PRETTY_FUNCTION__, 6, drm_handle->prime_fd, drm_handle->format, drm_handle->stride, drm_handle->width, drm_handle->height, drm_handle->usage, drm_handle->modifier);
 
     //gralloc_gbm_bo_t *gbm_bo = drm_handle->data;
 
@@ -95,16 +103,16 @@ static struct buffer *get_dmabuf_buffer(struct spurv_hwc_composer_device_1* pdev
         assert(created_buffers < NUM_BUFFERS);
         switch(drm_handle->format) {
         case HAL_PIXEL_FORMAT_RGBA_8888:
-            drm_format = DRM_FORMAT_ABGR8888;
+            drm_format = DRM_FORMAT_XRGB8888;
             break;
         case HAL_PIXEL_FORMAT_RGBX_8888:
-            drm_format = DRM_FORMAT_XBGR8888;
+            drm_format = DRM_FORMAT_XRGB8888;
             break;
         default:
             ALOGE("failed to convert Android format %d", drm_handle->format);
             return NULL;
         }
-        ret = create_dmabuf_buffer(pdev->display, &pdev->window->buffers[created_buffers], drm_handle->width, drm_handle->height, drm_format, 0, drm_handle->prime_fd, drm_handle->stride);
+        ret = create_dmabuf_buffer(pdev->display, &pdev->window->buffers[created_buffers], drm_handle->width, drm_handle->height, drm_format, 0, drm_handle->prime_fd, drm_handle->stride, drm_handle->modifier);
         if (ret) {
             ALOGE("failed to create a wayland dmabuf buffer");
             return NULL;
@@ -169,7 +177,9 @@ frame(void *data, struct wl_callback *callback, uint32_t time)
     }
 
     int64_t timestamp = int64_t(rt.tv_sec) * 1e9 + rt.tv_nsec;
+#if EMIT_VSYNC
     pdev->procs->vsync(pdev->procs, 0, timestamp);
+#endif
 }
 
 static const struct wl_callback_listener frame_listener = {
@@ -181,6 +191,7 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
 
     int ret;
     struct spurv_hwc_composer_device_1* pdev = (struct spurv_hwc_composer_device_1*)dev;
+    struct wl_region *region;
 
     //ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 1);
     if (!numDisplays || !displays) {
@@ -194,35 +205,18 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
     int err = 0;
     for (size_t layer = 0; layer < contents->numHwLayers; layer++) {
         hwc_layer_1_t* fb_layer = &contents->hwLayers[layer];
-        struct gralloc_handle_t *drm_handle2 = (struct gralloc_handle_t *)fb_layer->handle;
+        struct gralloc_handle_t *drm_handle = (struct gralloc_handle_t *)fb_layer->handle;
 
 #if 0
         ALOGE("*** %s: composition %d %dx%d flags %x hints %x transform %x blending %x", __PRETTY_FUNCTION__, fb_layer->compositionType,
-              drm_handle2 ? drm_handle2->width : 0, drm_handle2 ? drm_handle2->height : 0,
+              drm_handle ? drm_handle->width : 0, drm_handle ? drm_handle->height : 0,
               fb_layer->flags, fb_layer->hints, fb_layer->transform, fb_layer->blending);
 #endif
-        int releaseFenceFd = -1;
-        if (fb_layer->compositionType == HWC_FRAMEBUFFER_TARGET) {
-            if (fb_layer->acquireFenceFd > 0) {
-                const int kAcquireWarningMS= 3000;
-                err = sync_wait(fb_layer->acquireFenceFd, kAcquireWarningMS);
-                if (err < 0 && errno == ETIME) {
-                    ALOGE("hwcomposer waited on fence %d for %d ms",
-                          fb_layer->acquireFenceFd, kAcquireWarningMS);
-                }
-                close(fb_layer->acquireFenceFd);
-
-                if (fb_layer->compositionType != HWC_FRAMEBUFFER_TARGET) {
-                    ALOGE("hwcomposer found acquire fence on layer %d which is not an"
-                          "HWC_FRAMEBUFFER_TARGET layer", layer);
-                }
-
-                releaseFenceFd = dup(fb_layer->acquireFenceFd);
-                fb_layer->acquireFenceFd = -1;
-            }
-        }
 
         //ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 4);
+
+        if (fb_layer->flags & HWC_SKIP_LAYER)
+            continue;
 
 #if USE_SUBSURFACES
         if (fb_layer->compositionType != HWC_OVERLAY &&
@@ -241,12 +235,14 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
         }
 
         //ALOGE("*** %s: %d handle %d", __PRETTY_FUNCTION__, 5, fb_layer->handle->data[0]);
-        struct gralloc_handle_t *drm_handle = (struct gralloc_handle_t *)fb_layer->handle;
         struct buffer *buf = get_dmabuf_buffer(pdev, drm_handle);
         if (!buf) {
              ALOGE("Failed to get wl_dmabuf");
              continue;
         }
+
+        /* To be released when the compositor releases the buffer */
+        buf->releaseFenceFd = fb_layer->releaseFenceFd;
 
         struct wl_surface *surface = get_surface(pdev, fb_layer, layer);
         if (!surface) {
@@ -257,30 +253,33 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
         wl_surface_attach(surface, buf->buffer, 0, 0);
         wl_surface_damage(surface, 0, 0, drm_handle->width, drm_handle->height);
 
+        region = wl_compositor_create_region(pdev->display->compositor);
+        wl_region_add(region, 0, 0, drm_handle->width, drm_handle->height);
+        wl_surface_set_opaque_region(surface, region);
+        wl_region_destroy(region);
+
         wl_callback_destroy(pdev->window->callback);
         pdev->window->callback = wl_surface_frame(pdev->window->surface);
         wl_callback_add_listener(pdev->window->callback, &frame_listener, pdev);
 
         wl_surface_commit(surface);
+
+         const int kAcquireWarningMS= 3000;
+         int err = sync_wait(fb_layer->acquireFenceFd, kAcquireWarningMS);
+         if (err < 0 && errno == ETIME) {
+          ALOGE("hwcomposer waited on fence %d for %d ms",
+                fb_layer->acquireFenceFd, kAcquireWarningMS);
+         }
+         close(fb_layer->acquireFenceFd);
+
+        ALOGE("*** %s: Committing buffer %p with FD %d fence %d", __func__, buf, buf->dmabuf_fd, buf->releaseFenceFd);
         wl_display_flush(pdev->display->display);
-
-        if (fb_layer->compositionType == HWC_FRAMEBUFFER_TARGET) {
-            fb_layer->releaseFenceFd = releaseFenceFd;
-
-            if (releaseFenceFd > 0) {
-                if (retireFenceFd == -1) {
-                    retireFenceFd = dup(releaseFenceFd);
-                } else {
-                    int mergedFenceFd = sync_merge("hwc_set retireFence",
-                                                   releaseFenceFd, retireFenceFd);
-                    close(retireFenceFd);
-                    retireFenceFd = mergedFenceFd;
-                }
-            }
-        }
     }
 
-    contents->retireFenceFd = retireFenceFd;
+#if FENCES
+    close(contents->retireFenceFd);
+    contents->retireFenceFd = -1;
+#endif
 
     return err;
 }
@@ -361,18 +360,32 @@ static int hwc_get_display_configs(struct hwc_composer_device_1* dev __unused,
 
 static int32_t hwc_attribute(struct spurv_hwc_composer_device_1* pdev,
                              const uint32_t attribute) {
+    char property[PROPERTY_VALUE_MAX];
+    int width = 0;
+    int height = 0;
+    int density = 0;
+
     ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 1);
+
     switch(attribute) {
         case HWC_DISPLAY_VSYNC_PERIOD:
             return pdev->vsync_period_ns;
         case HWC_DISPLAY_WIDTH:
-            return 1024;
+            if (property_get("spurv.display_width", property, nullptr) > 0) {
+                width = atoi(property);
+            }
+            return width;
         case HWC_DISPLAY_HEIGHT:
-            return 768;
+            if (property_get("spurv.display_height", property, nullptr) > 0) {
+                height = atoi(property);
+            }
+            return height;
         case HWC_DISPLAY_DPI_X:
-            return 96*1000;
         case HWC_DISPLAY_DPI_Y:
-            return 96*1000;
+            if (property_get("ro.sf.lcd_density", property, nullptr) > 0) {
+                density = atoi(property);
+            }
+            return density * 1000;
         case HWC_DISPLAY_COLOR_TRANSFORM:
             return HAL_COLOR_TRANSFORM_IDENTITY;
         default:
@@ -573,6 +586,9 @@ static void hwc_register_procs(struct hwc_composer_device_1* dev,
 static int hwc_open(const struct hw_module_t* module, const char* name,
                     struct hw_device_t** device) {
     int ret = 0;
+    char property[PROPERTY_VALUE_MAX];
+    int width = 0;
+    int height = 0;
 
     if (strcmp(name, HWC_HARDWARE_COMPOSER)) {
         ALOGE("%s called with bad name %s", __FUNCTION__, name);
@@ -612,19 +628,27 @@ static int hwc_open(const struct hw_module_t* module, const char* name,
     }
     ALOGE("wayland display %p", pdev->display);
 
-    pdev->window = create_window(pdev->display, 1024, 768);
+    if (property_get("spurv.display_width", property, nullptr) > 0) {
+        width = atoi(property);
+    }
+
+    if (property_get("spurv.display_height", property, nullptr) > 0) {
+        height = atoi(property);
+    }
+
+    pdev->window = create_window(pdev->display, width, height);
     if (!pdev->display) {
         ALOGE("failed to create the wayland window");
         return -ENODEV;
     }
 
-	/* Here we retrieve the linux-dmabuf objects if executed without immed,
-	 * or error */
-	wl_display_roundtrip(pdev->display->display);
+    /* Here we retrieve the linux-dmabuf objects if executed without immed,
+     * or error */
+    wl_display_roundtrip(pdev->display->display);
 
-   pdev->window->callback = wl_surface_frame(pdev->window->surface);
-   wl_callback_add_listener(pdev->window->callback, &frame_listener, pdev);
-   wl_surface_commit(pdev->window->surface);
+    pdev->window->callback = wl_surface_frame(pdev->window->surface);
+    wl_callback_add_listener(pdev->window->callback, &frame_listener, pdev);
+    wl_surface_commit(pdev->window->surface);
 
     pthread_mutex_init(&pdev->vsync_lock, NULL);
     pdev->vsync_callback_enabled = true;

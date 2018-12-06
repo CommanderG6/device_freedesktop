@@ -81,6 +81,8 @@ struct buffer {
 	int bpp;
 	unsigned long stride;
 	int format;
+
+   int releaseFenceFd;
 };
 
 #define NUM_BUFFERS 1024
@@ -105,7 +107,7 @@ struct window {
 int
 create_dmabuf_buffer(struct display *display, struct buffer *buffer,
 		     int width, int height, int format, uint32_t opts,
-		     int prime_fd, int stride);
+		     int prime_fd, int stride, uint64_t modifier);
 
 struct display *
 create_display(const struct wl_touch_listener *touch_listener, void *touch_data);

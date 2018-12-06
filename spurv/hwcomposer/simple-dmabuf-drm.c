@@ -77,12 +77,15 @@ static int running = 1;
 static void
 redraw(void *data, struct wl_callback *callback, uint32_t time);
 
+#include <log/log.h>
+
 static void
 buffer_release(void *data, struct wl_buffer *buffer)
 {
 	struct buffer *mybuf = data;
 
-	mybuf->busy = 0;
+   ALOGE("*** %s: Closing release fence for buffer %p with FD %d fence %d", __func__, mybuf, mybuf->dmabuf_fd, mybuf->releaseFenceFd);
+	close(mybuf->releaseFenceFd);
 }
 
 static const struct wl_buffer_listener buffer_listener = {
@@ -413,10 +416,9 @@ static const struct zwp_linux_buffer_params_v1_listener params_listener = {
 int
 create_dmabuf_buffer(struct display *display, struct buffer *buffer,
 		     int width, int height, int format, uint32_t opts,
-		     int prime_fd, int stride)
+		     int prime_fd, int stride, uint64_t modifier)
 {
 	struct zwp_linux_buffer_params_v1 *params;
-	uint64_t modifier = 0;
 	uint32_t flags = 0;
 	struct drm_device *drm_dev;
 
@@ -569,7 +571,9 @@ create_window(struct display *display, int width, int height)
 		zxdg_toplevel_v6_add_listener(window->xdg_toplevel,
 					      &xdg_toplevel_listener, window);
 
-		zxdg_toplevel_v6_set_title(window->xdg_toplevel, "simple-dmabuf");
+		zxdg_toplevel_v6_set_title(window->xdg_toplevel, "Android");
+
+      zxdg_toplevel_v6_set_fullscreen(window->xdg_toplevel, NULL);
 
 		window->wait_for_configure = true;
 		wl_surface_commit(window->surface);
