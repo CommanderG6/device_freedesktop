@@ -49,6 +49,7 @@ PRODUCT_COPY_FILES += \
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.sf.lcd_density=150 \
     ro.hardware.gralloc=gbm \
+    gralloc.gbm.device=/dev/dri/card1 \
     ro.hardware.hwcomposer=spurv \
     ro.boot.hardware=spurv \
     ro.crypto.state=unsupported \
