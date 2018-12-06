@@ -1,3 +1,6 @@
+on init
+    export GALLIUM_HUD fps
+
 on post-fs-data
     setprop vold.post_fs_data_done 1
     mkdir /data/vendor/var 0755 root root
