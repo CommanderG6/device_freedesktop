@@ -6,10 +6,10 @@ on post-fs-data
     mkdir /data/vendor/var 0755 root root
     mkdir /data/vendor/var/run 0755 root root
     mkdir /data/vendor/var/run/netns 0755 root root
-    start dhcpclient_def
+    #start dhcpclient_def
 
 on nonencrypted
-    start dhcpclient_def
+    #start dhcpclient_def
     setprop service.adb.tcp.port 5556
     start adbd
     #start spurv-logcat
