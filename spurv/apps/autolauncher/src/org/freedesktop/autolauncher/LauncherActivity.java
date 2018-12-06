@@ -22,6 +22,10 @@ import android.os.Bundle;
 import android.util.Log;
 import android.content.Intent;
 
+import java.util.*;
+import java.util.regex.*;
+import java.io.*;
+
 public final class LauncherActivity extends Activity {
     private static final String TAG = "**** autolauncher";
 
@@ -31,13 +35,38 @@ public final class LauncherActivity extends Activity {
         super.onCreate(info);
     }
 
+    private String getProperty(String name, String defaultValue) {
+      ArrayList<String> processList = new ArrayList<String>();
+      String line;
+      Pattern pattern = Pattern.compile("\\[(.+)\\]: \\[(.+)\\]");
+      Matcher m;
+
+      try {
+          Process p = Runtime.getRuntime().exec("getprop");
+          BufferedReader input = new BufferedReader(new InputStreamReader(p.getInputStream()));
+          while ((line = input.readLine()) != null) {
+              processList.add(line);
+              m = pattern.matcher(line);
+              if (m.find()) {
+                  MatchResult result = m.toMatchResult();
+                  if(result.group(1).equals(name))
+                      return result.group(2);
+              }
+          }
+          input.close();
+      } catch (Exception err) {
+          err.printStackTrace();
+      }
+
+      return defaultValue;
+    }
 
     @Override
     public void onStart() {
         Log.i(TAG, "onStart");
         super.onStart();
         
-        Intent intent = getPackageManager().getLaunchIntentForPackage("com.rovio.angrybirds");
+        Intent intent = getPackageManager().getLaunchIntentForPackage(getProperty("spurv.application", ""));
         startActivity(intent);
     }
 
