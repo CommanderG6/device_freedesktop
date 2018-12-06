@@ -59,6 +59,10 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     persist.logd.size=1024K \
     debug.sf.nobootanimation=1 \
     qemu.hw.mainkeys=1 \
+    dalvik.vm.heapsize=36m \
+    spurv.application=fishnoodle.canabalt \
+    spurv.display_width=1920 \
+    spurv.display_height=1080 \
 
 PRODUCT_PROPERTY_OVERRIDES += \
     dalvik.vm.usejit=false \
