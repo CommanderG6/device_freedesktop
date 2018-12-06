@@ -9,6 +9,7 @@ systemd-nspawn --boot \
                --bind /dev/ptmx \
                --bind /dev/null \
                --bind /dev/dri/renderD128 \
+               --bind /dev/dri/card1 \
                --bind /dev/kmsg \
                --bind /dev/kmsg:/dev/kmsg_debug \
                --bind /dev/binder \
