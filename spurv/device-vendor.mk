@@ -57,4 +57,6 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     com.rovio.angrybirds \
     AutoLauncher \
+    fishnoodle.canabalt \
+    com.tripadvisor.tripadvisor
 
