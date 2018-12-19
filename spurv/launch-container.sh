@@ -18,6 +18,7 @@ systemd-nspawn --boot \
                --bind /dev/ashmem \
                --bind /dev/urandom \
                --bind /dev/random \
+               --bind /sys/kernel/debug/sync/sw_sync \
                --bind /dev/urandom:/dev/hw_random \
                --bind /sys \
                --bind /run/user/1000/wayland-0 \

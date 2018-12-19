@@ -55,6 +55,9 @@
 #endif
 #include <drm_fourcc.h>
 
+#include <libsync/sw_sync.h>
+#include <sync/sync.h>
+
 #include <wayland-client.h>
 #include "xdg-shell-unstable-v6-client-protocol.h"
 #include "fullscreen-shell-unstable-v1-client-protocol.h"
@@ -84,8 +87,10 @@ buffer_release(void *data, struct wl_buffer *buffer)
 {
 	struct buffer *mybuf = data;
 
-   ALOGE("*** %s: Closing release fence for buffer %p with FD %d fence %d", __func__, mybuf, mybuf->dmabuf_fd, mybuf->releaseFenceFd);
-	close(mybuf->releaseFenceFd);
+   //ALOGE("*** %s: Signaling release fence for buffer %p with FD %d fence %d", __func__, mybuf, mybuf->dmabuf_fd, mybuf->release_fence_fd);
+   mybuf->busy = false;
+   sw_sync_timeline_inc(mybuf->timeline_fd, 1);
+   close(mybuf->release_fence_fd);
 }
 
 static const struct wl_buffer_listener buffer_listener = {

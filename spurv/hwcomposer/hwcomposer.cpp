@@ -28,6 +28,7 @@
 #include <log/log.h>
 #include <cutils/properties.h>
 #include <hardware/hwcomposer.h>
+#include <libsync/sw_sync.h>
 #include <sync/sync.h>
 #include <drm_fourcc.h>
 #include <linux-dmabuf-unstable-v1-client-protocol.h>
@@ -47,6 +48,9 @@ struct spurv_hwc_composer_device_1 {
     bool vsync_callback_enabled; // protected by this->vsync_lock
 
     int input_fd;
+
+    int timeline_fd;
+    int next_sync_point;
 };
 
 #define USE_SUBSURFACES 0
@@ -241,14 +245,22 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
              continue;
         }
 
-        /* To be released when the compositor releases the buffer */
-        buf->releaseFenceFd = fb_layer->releaseFenceFd;
+        if (buf->busy) {
+            continue;
+        }
+
+        /* To be signaled when the compositor releases the buffer */
+        fb_layer->releaseFenceFd = sw_sync_fence_create(pdev->timeline_fd, "wayland_release", pdev->next_sync_point++);
+        buf->release_fence_fd = dup(fb_layer->releaseFenceFd);
+        buf->timeline_fd = pdev->timeline_fd;
 
         struct wl_surface *surface = get_surface(pdev, fb_layer, layer);
         if (!surface) {
              ALOGE("Failed to get surface");
              continue;
         }
+
+        buf->busy = true;
 
         wl_surface_attach(surface, buf->buffer, 0, 0);
         wl_surface_damage(surface, 0, 0, drm_handle->width, drm_handle->height);
@@ -264,15 +276,15 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
 
         wl_surface_commit(surface);
 
-         const int kAcquireWarningMS= 3000;
-         int err = sync_wait(fb_layer->acquireFenceFd, kAcquireWarningMS);
-         if (err < 0 && errno == ETIME) {
+        const int kAcquireWarningMS= 3000;
+        int err = sync_wait(fb_layer->acquireFenceFd, kAcquireWarningMS);
+        if (err < 0 && errno == ETIME) {
           ALOGE("hwcomposer waited on fence %d for %d ms",
                 fb_layer->acquireFenceFd, kAcquireWarningMS);
-         }
-         close(fb_layer->acquireFenceFd);
+        }
+        close(fb_layer->acquireFenceFd);
 
-        ALOGE("*** %s: Committing buffer %p with FD %d fence %d", __func__, buf, buf->dmabuf_fd, buf->releaseFenceFd);
+        //ALOGE("*** %s: Committing buffer %p with FD %d fence %d timeline_fd %d next_sync_point %d", __func__, buf, buf->dmabuf_fd, fb_layer->releaseFenceFd, pdev->timeline_fd, pdev->next_sync_point);
         wl_display_flush(pdev->display->display);
     }
 
@@ -618,6 +630,10 @@ static int hwc_open(const struct hw_module_t* module, const char* name,
 
     pdev->vsync_period_ns = 1000*1000*1000/60; // vsync is 60 hz
     pdev->input_fd = -1;
+
+    pdev->timeline_fd = sw_sync_timeline_create();
+    pdev->next_sync_point = 1;
+    //mExpectAcquireFences = false;
 
     setenv("XDG_RUNTIME_DIR", "/run/user/1000", 1);
     pdev->display = create_display(&touch_listener, pdev);

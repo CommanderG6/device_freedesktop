@@ -39,6 +39,7 @@ spurv_hwcomposer_cflags += \
     -Iout/soong/.intermediates/external/wayland-protocols/wayland_extension_client_protocol_headers/gen
 
 spurv_hwcomposer_c_includes += \
+    system/core \
     system/core/libsync \
     system/core/libsync/include
 
@@ -46,6 +47,7 @@ spurv_hwcomposer_relative_path := hw
 
 LOCAL_SHARED_LIBRARIES := $(spurv_hwcomposer_shared_libraries)
 LOCAL_STATIC_LIBRARIES := libwayland_client libffi libwayland_extension_client_protocols
+LOCAL_HEADER_LIBRARIES := libsystem_headers
 LOCAL_SRC_FILES := $(spurv_hwcomposer_src_files)
 LOCAL_CFLAGS := $(spurv_hwcomposer_cflags)
 LOCAL_C_INCLUDES := $(spurv_hwcomposer_c_includes)

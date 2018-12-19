@@ -82,7 +82,8 @@ struct buffer {
 	unsigned long stride;
 	int format;
 
-   int releaseFenceFd;
+   int timeline_fd;
+   int release_fence_fd;
 };
 
 #define NUM_BUFFERS 1024
