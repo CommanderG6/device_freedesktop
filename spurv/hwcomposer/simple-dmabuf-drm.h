@@ -27,6 +27,7 @@ struct display {
 	struct wl_subcompositor *subcompositor;
 	struct wl_seat *seat;
 	struct wl_touch *touch;
+	struct wp_presentation *presentation;
 	struct zxdg_shell_v6 *shell;
 	struct zwp_fullscreen_shell_v1 *fshell;
 	struct zwp_linux_dmabuf_v1 *dmabuf;
@@ -55,6 +56,7 @@ struct drm_device {
 struct buffer {
 	struct wl_buffer *buffer;
 	int busy;
+	struct wp_presentation_feedback *feedback;
 
 	struct drm_device *dev;
 	int drm_fd;

@@ -32,7 +32,12 @@
 #include <sync/sync.h>
 #include <drm_fourcc.h>
 #include <linux-dmabuf-unstable-v1-client-protocol.h>
+#include <presentation-time-client-protocol.h>
 #include <gralloc_handle.h>
+
+#define ATRACE_TAG ATRACE_TAG_GRAPHICS
+#include <cutils/trace.h>
+#include <utils/Trace.h>
 
 #include "simple-dmabuf-drm.h"
 
@@ -40,12 +45,14 @@ struct spurv_hwc_composer_device_1 {
     hwc_composer_device_1_t base; // constant after init
     const hwc_procs_t *procs;     // constant after init
     pthread_t wayland_thread;     // constant after init
+    pthread_t vsync_thread;       // constant after init
     int32_t vsync_period_ns;      // constant after init
     struct display *display;      // constant after init
     struct window *window;        // constant after init
 
     pthread_mutex_t vsync_lock;
     bool vsync_callback_enabled; // protected by this->vsync_lock
+    uint64_t last_vsync_ns;
 
     int input_fd;
 
@@ -190,6 +197,116 @@ static const struct wl_callback_listener frame_listener = {
 	frame
 };
 
+static long time_to_sleep_to_next_vsync(struct timespec *rt, uint64_t last_vsync_ns, unsigned vsync_period_ns)
+{
+	uint64_t now = (uint64_t)rt->tv_sec * 1e9 + rt->tv_nsec;
+	unsigned frames_since_last_vsync = (now - last_vsync_ns) / vsync_period_ns + 1;
+	uint64_t next_vsync = last_vsync_ns + frames_since_last_vsync * vsync_period_ns;
+
+	return next_vsync - now;
+}
+
+static void* hwc_vsync_thread(void* data) {
+    struct spurv_hwc_composer_device_1* pdev = (struct spurv_hwc_composer_device_1*)data;
+    setpriority(PRIO_PROCESS, 0, HAL_PRIORITY_URGENT_DISPLAY);
+
+    struct timespec rt;
+    if (clock_gettime(CLOCK_MONOTONIC, &rt) == -1) {
+        ALOGE("%s:%d error in vsync thread clock_gettime: %s",
+              __FILE__, __LINE__, strerror(errno));
+    }
+    bool vsync_enabled = false;
+
+    struct timespec wait_time;
+    wait_time.tv_sec = 0;
+
+    pthread_mutex_lock(&pdev->vsync_lock);
+    wait_time.tv_nsec = time_to_sleep_to_next_vsync(&rt, pdev->last_vsync_ns, pdev->vsync_period_ns);
+    pthread_mutex_unlock(&pdev->vsync_lock);
+
+    while (true) {
+        ATRACE_BEGIN("hwc_vsync_thread");
+        //ALOGE("%s: sleeping %llu ms until next vsync", __func__, wait_time.tv_nsec / 1e6);
+        int err = nanosleep(&wait_time, NULL);
+        if (err == -1) {
+            if (errno == EINTR) {
+                break;
+            }
+            ATRACE_END();
+            ALOGE("error in vsync thread: %s", strerror(errno));
+            return NULL;
+        }
+
+        pthread_mutex_lock(&pdev->vsync_lock);
+        vsync_enabled = pdev->vsync_callback_enabled;
+        pthread_mutex_unlock(&pdev->vsync_lock);
+
+        if (clock_gettime(CLOCK_MONOTONIC, &rt) == -1) {
+            ALOGE("%s:%d error in vsync thread clock_gettime: %s",
+                  __FILE__, __LINE__, strerror(errno));
+        }
+
+	pthread_mutex_lock(&pdev->vsync_lock);
+	wait_time.tv_nsec = time_to_sleep_to_next_vsync(&rt, pdev->last_vsync_ns, pdev->vsync_period_ns);
+	pthread_mutex_unlock(&pdev->vsync_lock);
+
+        if (!vsync_enabled) {
+            ATRACE_END();
+            continue;
+        }
+
+        int64_t timestamp = (uint64_t)rt.tv_sec * 1e9 + rt.tv_nsec;
+        pdev->procs->vsync(pdev->procs, 0, timestamp);
+        ATRACE_END();
+    }
+
+    return NULL;
+}
+
+static void
+feedback_sync_output(void *data,
+		     struct wp_presentation_feedback *presentation_feedback,
+		     struct wl_output *output)
+{
+	/* not interested */
+}
+
+static void
+feedback_presented(void *data,
+		   struct wp_presentation_feedback *presentation_feedback,
+		   uint32_t tv_sec_hi,
+		   uint32_t tv_sec_lo,
+		   uint32_t tv_nsec,
+		   uint32_t refresh_nsec,
+		   uint32_t seq_hi,
+		   uint32_t seq_lo,
+		   uint32_t flags)
+{
+        struct spurv_hwc_composer_device_1* pdev = (struct spurv_hwc_composer_device_1*)data;
+        int ret;
+
+        pthread_mutex_lock(&pdev->vsync_lock);
+	pdev->last_vsync_ns = (((uint64_t)tv_sec_hi << 32) + tv_sec_lo) * 1e9 + tv_nsec;
+        pthread_mutex_unlock(&pdev->vsync_lock);
+}
+
+static void
+feedback_discarded(void *data,
+		   struct wp_presentation_feedback *presentation_feedback)
+{
+	//struct feedback *feedback = data;
+
+	printf("discarded\n");
+
+	//destroy_feedback(feedback);
+}
+
+static const struct wp_presentation_feedback_listener feedback_listener = {
+	feedback_sync_output,
+	feedback_presented,
+	feedback_discarded
+};
+
 static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
                    hwc_display_contents_1_t** displays) {
 
@@ -253,6 +370,7 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
         fb_layer->releaseFenceFd = sw_sync_fence_create(pdev->timeline_fd, "wayland_release", pdev->next_sync_point++);
         buf->release_fence_fd = dup(fb_layer->releaseFenceFd);
         buf->timeline_fd = pdev->timeline_fd;
+        ATRACE_ASYNC_BEGIN("release fence", (int)buf);
 
         struct wl_surface *surface = get_surface(pdev, fb_layer, layer);
         if (!surface) {
@@ -274,9 +392,14 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
         pdev->window->callback = wl_surface_frame(pdev->window->surface);
         wl_callback_add_listener(pdev->window->callback, &frame_listener, pdev);
 
+	struct wp_presentation *pres = pdev->window->display->presentation;
+	buf->feedback = wp_presentation_feedback(pres, surface);
+	wp_presentation_feedback_add_listener(buf->feedback,
+					      &feedback_listener, pdev);
+
         wl_surface_commit(surface);
 
-        const int kAcquireWarningMS= 3000;
+        const int kAcquireWarningMS = 100;
         int err = sync_wait(fb_layer->acquireFenceFd, kAcquireWarningMS);
         if (err < 0 && errno == ETIME) {
           ALOGE("hwcomposer waited on fence %d for %d ms",
@@ -668,6 +791,21 @@ static int hwc_open(const struct hw_module_t* module, const char* name,
 
     pthread_mutex_init(&pdev->vsync_lock, NULL);
     pdev->vsync_callback_enabled = true;
+
+    struct timespec rt;
+    if (clock_gettime(CLOCK_MONOTONIC, &rt) == -1) {
+       ALOGE("%s:%d error in vsync thread clock_gettime: %s",
+            __FILE__, __LINE__, strerror(errno));
+    }
+
+    pdev->last_vsync_ns = int64_t(rt.tv_sec) * 1e9 + rt.tv_nsec;
+
+    if (!pdev->vsync_thread) {
+	    ret = pthread_create (&pdev->vsync_thread, NULL, hwc_vsync_thread, pdev);
+	    if (ret) {
+		    ALOGE("spurv_hw_composer could not start vsync_thread\n");
+	    }
+    }
 
     ret = pthread_create (&pdev->wayland_thread, NULL, hwc_wayland_thread, pdev);
     if (ret) {

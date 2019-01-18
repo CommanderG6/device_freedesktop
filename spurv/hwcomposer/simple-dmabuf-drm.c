@@ -62,6 +62,7 @@
 #include "xdg-shell-unstable-v6-client-protocol.h"
 #include "fullscreen-shell-unstable-v1-client-protocol.h"
 #include "linux-dmabuf-unstable-v1-client-protocol.h"
+#include "presentation-time-client-protocol.h"
 
 #ifndef DRM_FORMAT_MOD_LINEAR
 #define DRM_FORMAT_MOD_LINEAR 0
@@ -82,6 +83,9 @@ redraw(void *data, struct wl_callback *callback, uint32_t time);
 
 #include <log/log.h>
 
+#define ATRACE_TAG ATRACE_TAG_GRAPHICS
+#include <cutils/trace.h>
+
 static void
 buffer_release(void *data, struct wl_buffer *buffer)
 {
@@ -91,6 +95,7 @@ buffer_release(void *data, struct wl_buffer *buffer)
    mybuf->busy = false;
    sw_sync_timeline_inc(mybuf->timeline_fd, 1);
    close(mybuf->release_fence_fd);
+   ATRACE_ASYNC_END("release fence", (int)mybuf);
 }
 
 static const struct wl_buffer_listener buffer_listener = {
@@ -742,6 +747,17 @@ static const struct wl_seat_listener seat_listener = {
 };
 
 static void
+presentation_clock_id(void *data, struct wp_presentation *presentation,
+		      uint32_t clk_id)
+{
+        ALOGE("*** %s: clk_id %d CLOCK_MONOTONIC %d", __func__, clk_id, CLOCK_MONOTONIC);
+}
+
+static const struct wp_presentation_listener presentation_listener = {
+	presentation_clock_id
+};
+
+static void
 registry_handle_global(void *data, struct wl_registry *registry,
 		       uint32_t id, const char *interface, uint32_t version)
 {
@@ -772,6 +788,11 @@ registry_handle_global(void *data, struct wl_registry *registry,
 		d->seat = wl_registry_bind(registry, id,
 					   &wl_seat_interface, 1);
 		wl_seat_add_listener(d->seat, &seat_listener, d);
+	} else if (strcmp(interface, "wp_presentation") == 0) {
+		d->presentation = wl_registry_bind(registry, id,
+					   &wp_presentation_interface, 1);
+		wp_presentation_add_listener(d->presentation,
+					     &presentation_listener, d);
 	}
 }
 
