@@ -29,6 +29,7 @@ PRODUCT_COPY_FILES += $(LOCAL_PATH)/init.eth0.sh:system/bin/init.eth0.sh
 PRODUCT_COPY_FILES += $(LOCAL_PATH)/init:root/sbin/init
 PRODUCT_COPY_FILES += $(LOCAL_PATH)/os-release:root/usr/lib/os-release
 PRODUCT_COPY_FILES += $(LOCAL_PATH)/launch-container.sh:root/launch-container.sh
+PRODUCT_COPY_FILES += $(LOCAL_PATH)/selinux-policy.bin:root/selinux-policy.bin
 PRODUCT_COPY_FILES += $(LOCAL_PATH)/manifest.xml:$(TARGET_COPY_OUT_VENDOR)/manifest.xml
 PRODUCT_COPY_FILES += $(LOCAL_PATH)/init.spurv.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/hw/init.spurv.rc
 PRODUCT_COPY_FILES += $(LOCAL_PATH)/cmdline:root/cmdline

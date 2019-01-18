@@ -3,3 +3,5 @@
 /usr/lib/os-release            u:object_r:same_process_hal_file:s0
 /launch-container.sh           u:object_r:same_process_hal_file:s0
 /cmdline                       u:object_r:same_process_hal_file:s0
+/selinux-policy.bin            u:object_r:same_process_hal_file:s0
+
