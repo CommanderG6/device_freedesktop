@@ -33,6 +33,7 @@
 #include <drm_fourcc.h>
 #include <linux-dmabuf-unstable-v1-client-protocol.h>
 #include <presentation-time-client-protocol.h>
+#include <xdg-shell-unstable-v6-client-protocol.h>
 #include <gralloc_handle.h>
 
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
@@ -396,6 +397,12 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
 	buf->feedback = wp_presentation_feedback(pres, surface);
 	wp_presentation_feedback_add_listener(buf->feedback,
 					      &feedback_listener, pdev);
+
+	if (drm_handle->width == pdev->display->width &&
+	    drm_handle->height == pdev->display->height)
+	        zxdg_toplevel_v6_set_fullscreen(pdev->window->xdg_toplevel, NULL);
+        else
+	        zxdg_toplevel_v6_unset_fullscreen(pdev->window->xdg_toplevel);
 
         wl_surface_commit(surface);
 

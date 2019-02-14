@@ -583,8 +583,6 @@ create_window(struct display *display, int width, int height)
 
 		zxdg_toplevel_v6_set_title(window->xdg_toplevel, "Android");
 
-      zxdg_toplevel_v6_set_fullscreen(window->xdg_toplevel, NULL);
-
 		window->wait_for_configure = true;
 		wl_surface_commit(window->surface);
 	} else if (display->fshell) {
@@ -746,6 +744,47 @@ static const struct wl_seat_listener seat_listener = {
 	seat_handle_capabilities,
 };
 
+
+
+static void
+output_handle_mode(void *data, struct wl_output *wl_output,
+		   uint32_t flags, int32_t width, int32_t height,
+		   int32_t refresh)
+{
+	struct display *d = data;
+
+	d->width = width;
+	d->height = height;
+}
+
+static void
+output_handle_geometry(void *data, struct wl_output *wl_output,
+		       int32_t x, int32_t y,
+		       int32_t physical_width, int32_t physical_height,
+		       int32_t subpixel,
+		       const char *make, const char *model,
+		       int32_t output_transform)
+{
+}
+
+static void
+output_handle_done(void *data, struct wl_output *wl_output)
+{
+}
+
+static void
+output_handle_scale(void *data, struct wl_output *wl_output,
+		    int32_t scale)
+{
+}
+
+static const struct wl_output_listener output_listener = {
+	output_handle_geometry,
+	output_handle_mode,
+	output_handle_done,
+	output_handle_scale,
+};
+
 static void
 presentation_clock_id(void *data, struct wp_presentation *presentation,
 		      uint32_t clk_id)
@@ -788,6 +827,10 @@ registry_handle_global(void *data, struct wl_registry *registry,
 		d->seat = wl_registry_bind(registry, id,
 					   &wl_seat_interface, 1);
 		wl_seat_add_listener(d->seat, &seat_listener, d);
+	} else if (strcmp(interface, "wl_output") == 0) {
+		d->output = wl_registry_bind(registry, id,
+					   &wl_output_interface, 1);
+		wl_output_add_listener(d->output, &output_listener, d);
 	} else if (strcmp(interface, "wp_presentation") == 0) {
 		d->presentation = wl_registry_bind(registry, id,
 					   &wp_presentation_interface, 1);

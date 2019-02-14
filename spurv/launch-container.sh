@@ -1,5 +1,17 @@
 #!/bin/bash -x
 
+APP=fishnoodle.canabalt
+WIDTH=1920
+HEIGHT=1080
+
+for arg in "$@"; do
+  case "$1" in
+    "--angry") APP=com.rovio.angrybirds ;;
+    "--width") WIDTH="$2" HEIGHT=$(bc <<< "$WIDTH * 0.5625 / 1") ;;
+  esac
+  shift
+done
+
 ROOTDIR=`dirname "$0"`
 chmod a+rw /dev/*binder /dev/ashmem
 chmod a+x /sys/kernel/debug/
@@ -35,6 +47,10 @@ chmod a+rw /run/aosp/pulse/native
 
 dd if=$ROOTDIR/selinux-policy.bin of=/sys/fs/selinux/load bs=20M
 setenforce 0
+
+echo spurv.application=$APP >> $ROOTDIR/default.prop
+echo spurv.display_width=$WIDTH >> $ROOTDIR/default.prop
+echo spurv.display_height=$HEIGHT >> $ROOTDIR/default.prop
 
 systemd-nspawn --boot \
                --tmpfs /metadata \
