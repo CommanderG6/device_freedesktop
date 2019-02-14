@@ -114,10 +114,10 @@ static struct buffer *get_dmabuf_buffer(struct spurv_hwc_composer_device_1* pdev
         assert(created_buffers < NUM_BUFFERS);
         switch(drm_handle->format) {
         case HAL_PIXEL_FORMAT_RGBA_8888:
-            drm_format = DRM_FORMAT_XRGB8888;
+            drm_format = DRM_FORMAT_XBGR8888;
             break;
         case HAL_PIXEL_FORMAT_RGBX_8888:
-            drm_format = DRM_FORMAT_XRGB8888;
+            drm_format = DRM_FORMAT_XBGR8888;
             break;
         default:
             ALOGE("failed to convert Android format %d", drm_handle->format);
