@@ -1,1 +1,19 @@
- 
+== Kernel ==
+
+== Root filesystem ==
+
+== Android ==
+
+1. mkdir aosp; cd aosp
+
+2. Install repo as per https://source.android.com/setup/build/downloading
+
+3. repo init -u https://android.googlesource.com/platform/manifest -b android-9.0.0_r10
+
+4. git clone https://gitlab.collabora.com/zodiac/android_manifest.git .repo/local_manifests/
+
+5. repo sync
+
+6. cd ..
+
+7. sh ./aosp/device/freedesktop/spurv/create-rootfs.sh
