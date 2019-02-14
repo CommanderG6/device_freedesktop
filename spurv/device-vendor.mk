@@ -9,6 +9,11 @@ PRODUCT_PACKAGES += \
     gatekeeper.spurv \
     sensors.spurv \
     activity_recognition.spurv \
+    audio.primary.spurv \
+    alsa-conf \
+    libasound_module_pcm_pulse \
+    libasound_module_ctl_pulse \
+    libasound_module_conf_pulse
 
 PRODUCT_PACKAGES += vndk_package
 

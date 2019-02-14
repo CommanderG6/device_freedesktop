@@ -19,11 +19,19 @@ mount -o loop,rw userdata.img $ROOTDIR/data
 [ ! -d /run/user/1000 ] && mkdir -p /run/user/1000
 [ ! -d /var/log/journal ] && mkdir -p /var/log/journal
 [ ! -d /dev/socket ] && mkdir /dev/socket
+
+chmod a+rw /run/user/1000/
+
 XDG_RUNTIME_DIR=/run/user/1000/ weston --tty=7 &
+
+rm -rf /run/aosp/pulse
+mkdir -p /run/aosp
+chmod a+rw /run/aosp
+PULSE_RUNTIME_PATH=/run/aosp/pulse pulseaudio --system &
 
 sleep 4 # Wait for /run/user/1000/wayland-0 to be created
 chmod a+rw /run/user/1000/wayland-0
-ls -l /run/user/1000/wayland-0
+chmod a+rw /run/aosp/pulse/native
 
 dd if=$ROOTDIR/selinux-policy.bin of=/sys/fs/selinux/load bs=20M
 setenforce 0
@@ -47,12 +55,15 @@ systemd-nspawn --boot \
                --bind /sys/kernel/debug/sync/sw_sync \
                --bind /dev/urandom:/dev/hw_random \
                --bind /sys \
-               --bind /run/user/1000/wayland-0 --register no \
+               --bind /run/user/1000/wayland-0 \
+               --bind /run/aosp/pulse/native \
+               --register no \
 	       --resolv-conf copy-host \
 	       --link-journal host \
                --directory $ROOTDIR
 
 # --network-zone=aosp
 
+killall pulseaudio
 killall weston
 
