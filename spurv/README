@@ -4,9 +4,10 @@
 2. Install repo as per https://source.android.com/setup/build/downloading
 3. repo init -u https://android.googlesource.com/platform/manifest -b android-9.0.0_r10
 4. git clone https://gitlab.collabora.com/zodiac/android_manifest.git .repo/local_manifests/
-5. repo sync
-6. cd ..
-7. sh ./aosp/device/freedesktop/spurv/create-rootfs.sh
+5. repo sync -j8
+6. . build/envsetup.sh
+7. lunch spurv-eng
+8. make -j12
 
 == Kernel ==
 
@@ -18,5 +19,23 @@
 
 == Root filesystem ==
 
-1. sudo debootstrap --arch armhf --variant minbase testing rootfs http://deb.debian.org/debian/ --include="systemd,weston,systemd-container,udev,sudo,openssh-server,ip-utils,less"
-2. cp linux/arch/arm/boot/zImage linux/arch/arm/boot/dts/imx6qp-zii-rdu2.dtb rootfs/boot/.
+1. sudo debootstrap --arch armhf --variant minbase testing rootfs http://deb.debian.org/debian/ --include="systemd,weston,systemd-container,udev,sudo,openssh-server,ip-utils,pulseaudio"
+2. sudo chroot rootfs adduser aosp -G sudo
+3. cp linux/arch/arm/boot/zImage linux/arch/arm/boot/dts/imx6qp-zii-rdu2.dtb rootfs/boot/.
+4. sudo cp -rfa rootfs/* /mnt/sdcard/.
+5. cp aosp/device/freedesktop/spurv/run.sh rootfs/home/aosp/.
+6. cp aosp/device/freedesktop/spurv/system.img rootfs/home/aosp/aosp.img
+7. cp aosp/device/freedesktop/spurv/vendor.img rootfs/home/aosp/.
+8. cp aosp/device/freedesktop/spurv/userdata.img rootfs/home/aosp/.
+
+== Boot SD card ==
+
+1. In barebox's console:
+2. detect mmc1
+3. global.linux.bootargs.base="console=ttymxc0,115200 console=tty0 enforcing=0 ip=dhcp rw rootwait root=/dev/mmcblk0 log_buf_len=16M cma=512M vmalloc=512M" 
+4. bootm -o /mnt/mmc1/boot/imx6qp-zii-rdu2.dtb -r /mnt/mmc1/boot/initramfs.uImage /mnt/mmc1/boot/zImage
+
+== Run! ==
+
+1. Log as aosp
+2. sh run.sh
