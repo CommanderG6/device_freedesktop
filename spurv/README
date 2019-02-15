@@ -1,19 +1,22 @@
-== Kernel ==
-
-== Root filesystem ==
-
 == Android ==
 
 1. mkdir aosp; cd aosp
-
 2. Install repo as per https://source.android.com/setup/build/downloading
-
 3. repo init -u https://android.googlesource.com/platform/manifest -b android-9.0.0_r10
-
 4. git clone https://gitlab.collabora.com/zodiac/android_manifest.git .repo/local_manifests/
-
 5. repo sync
-
 6. cd ..
-
 7. sh ./aosp/device/freedesktop/spurv/create-rootfs.sh
+
+== Kernel ==
+
+1. git clone https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux
+2. cd linux
+3. git reset --hard v4.20
+4. sh ../aosp/device/freedesktop/spurv/build-kernel.sh
+5. The kernel image is at arch/arm/boot/zImage and the DT at arch/arm/boot/dts/imx6qp-zii-rdu2.dtb
+
+== Root filesystem ==
+
+1. sudo debootstrap --arch armhf --variant minbase testing rootfs http://deb.debian.org/debian/ --include="systemd,weston,systemd-container,udev,sudo,openssh-server,ip-utils,less"
+2. cp linux/arch/arm/boot/zImage linux/arch/arm/boot/dts/imx6qp-zii-rdu2.dtb rootfs/boot/.
