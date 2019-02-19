@@ -19,14 +19,15 @@
 
 == Root filesystem ==
 
-1. sudo debootstrap --include=systemd,weston,systemd-container,udev,sudo,openssh-server,iputils-ping,pulseaudio --arch armhf --variant minbase testing rootfs http://deb.debian.org/debian/
-2. sudo chroot rootfs adduser aosp -G sudo
-3. cp linux/arch/arm/boot/zImage linux/arch/arm/boot/dts/imx6qp-zii-rdu2.dtb rootfs/boot/.
-4. sudo cp -rfa rootfs/* /mnt/sdcard/.
-5. cp aosp/device/freedesktop/spurv/run.sh rootfs/home/aosp/.
-6. cp aosp/device/freedesktop/spurv/system.img rootfs/home/aosp/aosp.img
-7. cp aosp/device/freedesktop/spurv/vendor.img rootfs/home/aosp/.
-8. cp aosp/device/freedesktop/spurv/userdata.img rootfs/home/aosp/.
+1. sudo apt install debootstrap qemu-user-static
+2. sudo debootstrap --include=systemd,weston,systemd-container,udev,sudo,openssh-server,iputils-ping,pulseaudio --arch armhf --variant minbase testing rootfs http://deb.debian.org/debian/
+3. sudo chroot rootfs adduser aosp -G sudo
+4. cp linux/arch/arm/boot/zImage linux/arch/arm/boot/dts/imx6qp-zii-rdu2.dtb rootfs/boot/.
+5. sudo cp -rfa rootfs/* /mnt/sdcard/.
+6. cp aosp/device/freedesktop/spurv/run.sh rootfs/home/aosp/.
+7. cp aosp/device/freedesktop/spurv/system.img rootfs/home/aosp/aosp.img
+8. cp aosp/device/freedesktop/spurv/vendor.img rootfs/home/aosp/.
+9. cp aosp/device/freedesktop/spurv/userdata.img rootfs/home/aosp/.
 
 == Boot SD card ==
 
