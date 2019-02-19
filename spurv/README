@@ -19,7 +19,7 @@
 
 == Root filesystem ==
 
-1. sudo debootstrap --arch armhf --variant minbase testing rootfs http://deb.debian.org/debian/ --include="systemd,weston,systemd-container,udev,sudo,openssh-server,ip-utils,pulseaudio"
+1. sudo debootstrap --include=systemd,weston,systemd-container,udev,sudo,openssh-server,iputils-ping,pulseaudio --arch armhf --variant minbase testing rootfs http://deb.debian.org/debian/
 2. sudo chroot rootfs adduser aosp -G sudo
 3. cp linux/arch/arm/boot/zImage linux/arch/arm/boot/dts/imx6qp-zii-rdu2.dtb rootfs/boot/.
 4. sudo cp -rfa rootfs/* /mnt/sdcard/.
