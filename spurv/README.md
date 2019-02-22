@@ -57,4 +57,4 @@ The kernel image is at arch/arm/boot/zImage and the DT at arch/arm/boot/dts/imx6
 
 Log in as aosp/aosp
 
-    sh run.sh
+    sudo sh run.sh
