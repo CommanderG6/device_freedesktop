@@ -3,7 +3,7 @@ umount aosp
 sync
 mkdir -p aosp
 mount -o loop,rw aosp.img aosp
-sh aosp/launch-container.sh
+bash aosp/launch-container.sh
 umount aosp/vendor
 umount aosp/data
 umount aosp
