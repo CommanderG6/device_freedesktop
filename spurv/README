@@ -1,7 +1,9 @@
 == Android ==
 
     mkdir aosp; cd aosp
-    Install repo as per https://source.android.com/setup/build/downloading
+
+Install repo as per https://source.android.com/setup/build/downloading
+
     repo init -u https://android.googlesource.com/platform/manifest -b android-9.0.0_r10
     git clone https://gitlab.collabora.com/zodiac/android_manifest.git .repo/local_manifests/
     repo sync -j8
