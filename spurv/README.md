@@ -1,4 +1,4 @@
-== Android ==
+## Android
 
     mkdir aosp; cd aosp
 
@@ -11,7 +11,7 @@ Install repo as per https://source.android.com/setup/build/downloading
     lunch spurv-eng
     make -j12
 
-== Kernel ==
+## Kernel
 
     git clone https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux
     cd linux
@@ -20,18 +20,20 @@ Install repo as per https://source.android.com/setup/build/downloading
 
 The kernel image is at arch/arm/boot/zImage and the DT at arch/arm/boot/dts/imx6qp-zii-rdu2.dtb
 
-== Root filesystem ==
+## Root filesystem
 
     sudo apt install debootstrap qemu-user-static
     sudo debootstrap --include=systemd,weston,systemd-container,udev,sudo,openssh-server,iputils-ping,pulseaudio --arch armhf --variant minbase testing rootfs http://deb.debian.org/debian/
     sudo chroot rootfs adduser aosp --ingroup sudo
     
-Prepare sdcard
+#### Prepare sdcard
+
     mkfs.ext4 /dev/mmcblk0
     sudo mkdir /mnt/sdcard
     sudo mount /dev/mmcblk0 /mnt/sdcard
 
-Copy files to sdcard:
+#### Copy files to sdcard
+
     sudo cp linux/arch/arm/boot/zImage linux/arch/arm/boot/dts/imx6qp-zii-rdu2.dtb rootfs/boot/.
     cp aosp/device/freedesktop/spurv/run.sh rootfs/home/aosp/.
     cp aosp/out/target/product/spurv/system.img rootfs/home/aosp/aosp.img
@@ -40,9 +42,10 @@ Copy files to sdcard:
     sudo cp -rfa rootfs/* /mnt/sdcard/.
 
 
-== Boot SD card ==
+## Boot SD card
 
-In barebox's console:
+#### In barebox's console
+
     detect mmc1
     global.linux.bootargs.base="console=ttymxc0,115200 console=tty0 enforcing=0 ip=dhcp rw rootwait root=/dev/mmcblk0 log_buf_len=16M cma=512M vmalloc=512M" 
     global.bootm.oftree=/mnt/mmc1/boot/imx6qp-zii-rdu2.dtb
@@ -50,7 +53,8 @@ In barebox's console:
     global.bootm.initrd=
     bootm
 
-== Run! ==
+#### Run!
 
-Log as aosp
+Log in as aosp/aosp
+
     sh run.sh
