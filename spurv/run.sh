@@ -1,4 +1,4 @@
-sudo su -c "echo 100 >  /sys/bus/platform/drivers/rave_sp_backlight/21f0000.serial\:rave-sp\:backlight/backlight/21f0000.serial\:rave-sp\:backlight/brightness"
+echo 100 >  /sys/bus/platform/drivers/rave_sp_backlight/21f0000.serial\:rave-sp\:backlight/backlight/21f0000.serial\:rave-sp\:backlight/brightness
 umount aosp
 sync
 mkdir -p aosp
