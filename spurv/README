@@ -33,7 +33,7 @@ Prepare sdcard
 
 Copy files to sdcard:
     sudo cp linux/arch/arm/boot/zImage linux/arch/arm/boot/dts/imx6qp-zii-rdu2.dtb rootfs/boot/.
-    cp aosp/device/freedesktop/spurv/*.sh rootfs/home/aosp/.
+    cp aosp/device/freedesktop/spurv/run.sh rootfs/home/aosp/.
     cp aosp/out/target/product/spurv/system.img rootfs/home/aosp/aosp.img
     cp aosp/out/target/product/spurv/vendor.img rootfs/home/aosp/.
     cp aosp/out/target/product/spurv/userdata.img rootfs/home/aosp/.
