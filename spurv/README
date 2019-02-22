@@ -45,7 +45,10 @@ Copy files to sdcard:
 In barebox's console:
     detect mmc1
     global.linux.bootargs.base="console=ttymxc0,115200 console=tty0 enforcing=0 ip=dhcp rw rootwait root=/dev/mmcblk0 log_buf_len=16M cma=512M vmalloc=512M" 
-    bootm -o /mnt/mmc1/boot/imx6qp-zii-rdu2.dtb -r /mnt/mmc1/boot/initramfs.uImage /mnt/mmc1/boot/zImage
+    global.bootm.oftree=/mnt/mmc1/boot/imx6qp-zii-rdu2.dtb
+    global.bootm.image=/mnt/mmc1/boot/zImage
+    global.bootm.initrd=
+    bootm
 
 == Run! ==
 
