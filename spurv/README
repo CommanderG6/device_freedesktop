@@ -27,9 +27,9 @@ The kernel image is at arch/arm/boot/zImage and the DT at arch/arm/boot/dts/imx6
     sudo chroot rootfs adduser aosp --ingroup sudo
     
 Prepare sdcard
-    mkfs.ext4 /dev/mmcbkl0
+    mkfs.ext4 /dev/mmcblk0
     sudo mkdir /mnt/sdcard
-    sudo mount /dev/mmcbkl0 /mnt/sdcard
+    sudo mount /dev/mmcblk0 /mnt/sdcard
 
 Copy files to sdcard:
     sudo cp linux/arch/arm/boot/zImage linux/arch/arm/boot/dts/imx6qp-zii-rdu2.dtb rootfs/boot/.
