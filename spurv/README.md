@@ -13,9 +13,8 @@ Install repo as per https://source.android.com/setup/build/downloading
 
 ## Kernel
 
-    git clone https://kernel.googlesource.com/pub/scm/linux/kernel/git/torvalds/linux
+    git clone https://gitlab.collabora.com/zodiac/linux.git -b android-container
     cd linux
-    git reset --hard v4.20
     sh ../aosp/device/freedesktop/spurv/build-kernel.sh
 
 The kernel image is at arch/arm/boot/zImage and the DT at arch/arm/boot/dts/imx6qp-zii-rdu2.dtb
