@@ -7,8 +7,8 @@ PRODUCT_PACKAGES += \
     gralloc.gbm \
     libGLES_mesa \
     gatekeeper.spurv \
-    sensors.spurv \
-    activity_recognition.spurv \
+    sensors.iio \
+    activity_recognition.iio \
     audio.primary.spurv \
     alsa-conf \
     libasound_module_pcm_pulse \
