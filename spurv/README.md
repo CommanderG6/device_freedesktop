@@ -22,7 +22,7 @@ The kernel image is at arch/arm/boot/zImage and the DT at arch/arm/boot/dts/imx6
 ## Root filesystem
 
     sudo apt install debootstrap qemu-user-static
-    sudo debootstrap --include=systemd,weston,systemd-container,udev,sudo,openssh-server,iputils-ping,pulseaudio --arch armhf --variant minbase testing rootfs http://deb.debian.org/debian/
+    sudo debootstrap --include=systemd,weston,systemd-container,udev,sudo,openssh-server,iputils-ping,pulseaudio,psmisc --arch armhf --variant minbase testing rootfs http://deb.debian.org/debian/
     sudo chroot rootfs adduser aosp --ingroup sudo
     
 #### Prepare sdcard
