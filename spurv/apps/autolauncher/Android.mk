@@ -17,37 +17,37 @@ LOCAL_OVERRIDES_PACKAGES := \
 	LatinIME \
 	QuickSearchBox \
 	SystemUI \
-   \
-   BasicDreams \
-   Bluetooth \
-   BluetoothMidiService \
-   BookmarkProvider \
-   Browser2 \
-   BuiltInPrintService \
-   Calendar \
-   Camera2 \
-   CaptivePortalLogin \
-   CertInstaller \
-   CompanionDeviceManager \
-   CtsShimPrebuilt \
-   DeskClock \
-   EasterEgg \
-   Email \
-   ExactCalculator \
-   Gallery2 \
-   HTMLViewer \
-   KeyChain \
-   LiveWallpapersPicker \
-   Music \
-   NfcNci \
-   PacProcessor \
-   PhotoTable \
-   PrintRecommendationService \
-   PrintSpooler \
-   SecureElement \
-   SimAppDialog \
-   Traceur \
-   WallpaperBackup \
-   WAPPushManager \
+	\
+	BasicDreams \
+	Bluetooth \
+	BluetoothMidiService \
+	BookmarkProvider \
+	Browser2 \
+	BuiltInPrintService \
+	Calendar \
+	Camera2 \
+	CaptivePortalLogin \
+	CertInstaller \
+	CompanionDeviceManager \
+	CtsShimPrebuilt \
+	DeskClock \
+	EasterEgg \
+	Email \
+	ExactCalculator \
+	Gallery2 \
+	HTMLViewer \
+	KeyChain \
+	LiveWallpapersPicker \
+	Music \
+	NfcNci \
+	PacProcessor \
+	PhotoTable \
+	PrintRecommendationService \
+	PrintSpooler \
+	SecureElement \
+	SimAppDialog \
+	Traceur \
+	WallpaperBackup \
+	WAPPushManager \
 
 include $(BUILD_PACKAGE)

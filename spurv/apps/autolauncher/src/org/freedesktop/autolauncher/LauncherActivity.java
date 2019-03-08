@@ -65,7 +65,7 @@ public final class LauncherActivity extends Activity {
     public void onStart() {
         Log.i(TAG, "onStart");
         super.onStart();
-        
+
         Intent intent = getPackageManager().getLaunchIntentForPackage(getProperty("spurv.application", ""));
         startActivity(intent);
     }

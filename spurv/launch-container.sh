@@ -74,8 +74,8 @@ systemd-nspawn --boot \
                --bind /run/user/1000/wayland-0 \
                --bind /run/aosp/pulse/native \
                --register no \
-	       --resolv-conf copy-host \
-	       --link-journal host \
+               --resolv-conf copy-host \
+               --link-journal host \
                --directory $ROOTDIR
 
 # --network-zone=aosp
