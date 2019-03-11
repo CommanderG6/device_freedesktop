@@ -45,6 +45,10 @@ The kernel image is at arch/arm/boot/zImage and the DT at arch/arm/boot/dts/imx6
 
 #### In barebox's console
 
+    # Enable RAVE-SP - which controls things like backligt
+    memset -b -d /dev/main-eeprom 0xa2 1 0
+
+    # Set up boot options
     detect mmc1
     global.linux.bootargs.base="console=ttymxc0,115200 console=tty0 enforcing=0 ip=dhcp rw rootwait root=/dev/mmcblk0 log_buf_len=16M cma=512M vmalloc=512M" 
     global.bootm.oftree=/mnt/mmc1/boot/imx6qp-zii-rdu2.dtb
