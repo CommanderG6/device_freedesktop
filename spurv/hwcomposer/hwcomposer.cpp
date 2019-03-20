@@ -822,17 +822,17 @@ static int hwc_open(const struct hw_module_t* module, const char* name,
 
 
 static struct hw_module_methods_t hwc_module_methods = {
-    open: hwc_open,
+    .open = hwc_open,
 };
 
 hwc_module_t HAL_MODULE_INFO_SYM = {
-    common: {
-        tag: HARDWARE_MODULE_TAG,
-        module_api_version: HWC_MODULE_API_VERSION_0_1,
-        hal_api_version: HARDWARE_HAL_API_VERSION,
-        id: HWC_HARDWARE_MODULE_ID,
-        name: "Android Emulator hwcomposer module",
-        author: "The Android Open Source Project",
-        methods: &hwc_module_methods,
+    .common = {
+        .tag = HARDWARE_MODULE_TAG,
+        .module_api_version = HWC_MODULE_API_VERSION_0_1,
+        .hal_api_version = HARDWARE_HAL_API_VERSION,
+        .id = HWC_HARDWARE_MODULE_ID,
+        .name = "Android Emulator hwcomposer module",
+        .author = "The Android Open Source Project",
+        .methods = &hwc_module_methods,
     }
 };
