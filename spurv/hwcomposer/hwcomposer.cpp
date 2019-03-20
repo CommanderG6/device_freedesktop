@@ -394,8 +394,8 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
 	wp_presentation_feedback_add_listener(buf->feedback,
 					      &feedback_listener, pdev);
 
-	if (drm_handle->width == pdev->display->width &&
-	    drm_handle->height == pdev->display->height)
+	if (drm_handle->width == (uint32_t) pdev->display->width &&
+	    drm_handle->height == (uint32_t) pdev->display->height)
 	        zxdg_toplevel_v6_set_fullscreen(pdev->window->xdg_toplevel, NULL);
         else
 	        zxdg_toplevel_v6_unset_fullscreen(pdev->window->xdg_toplevel);
