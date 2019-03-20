@@ -148,7 +148,6 @@ static struct wl_surface *get_surface(struct spurv_hwc_composer_device_1* pdev, 
     struct wl_surface *surface = NULL;
     struct wl_subsurface *subsurface = NULL;
     static unsigned created_surfaces = 0;
-    int ret = 0;
 
     if (pos < created_surfaces) {
         surface = pdev->window->surfaces[pos];
@@ -188,8 +187,8 @@ frame(void *data, struct wl_callback *callback, uint32_t time)
             __FILE__, __LINE__, strerror(errno));
     }
 
-    int64_t timestamp = int64_t(rt.tv_sec) * 1e9 + rt.tv_nsec;
 #if EMIT_VSYNC
+    int64_t timestamp = int64_t(rt.tv_sec) * 1e9 + rt.tv_nsec;
     pdev->procs->vsync(pdev->procs, 0, timestamp);
 #endif
 }
@@ -284,7 +283,6 @@ feedback_presented(void *data,
 		   uint32_t flags)
 {
         struct spurv_hwc_composer_device_1* pdev = (struct spurv_hwc_composer_device_1*)data;
-        int ret;
 
         pthread_mutex_lock(&pdev->vsync_lock);
 	pdev->last_vsync_ns = (((uint64_t)tv_sec_hi << 32) + tv_sec_lo) * 1e9 + tv_nsec;
@@ -311,7 +309,6 @@ static const struct wp_presentation_feedback_listener feedback_listener = {
 static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
                    hwc_display_contents_1_t** displays) {
 
-    int ret;
     struct spurv_hwc_composer_device_1* pdev = (struct spurv_hwc_composer_device_1*)dev;
     struct wl_region *region;
 
@@ -323,7 +320,6 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
     //ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 2);
     hwc_display_contents_1_t* contents = displays[HWC_DISPLAY_PRIMARY];
 
-    int retireFenceFd = -1;
     int err = 0;
     for (size_t layer = 0; layer < contents->numHwLayers; layer++) {
         hwc_layer_1_t* fb_layer = &contents->hwLayers[layer];
