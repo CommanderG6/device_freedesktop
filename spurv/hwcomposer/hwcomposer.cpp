@@ -334,33 +334,52 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
 
         //ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 4);
 
-        if (fb_layer->flags & HWC_SKIP_LAYER)
+        if (fb_layer->flags & HWC_SKIP_LAYER) {
+            if (fb_layer->acquireFenceFd != -1) {
+                close(fb_layer->acquireFenceFd);
+            }
             continue;
+        }
 
 #if USE_SUBSURFACES
         if (fb_layer->compositionType != HWC_OVERLAY &&
             fb_layer->compositionType != HWC_FRAMEBUFFER_TARGET) {
-             ALOGE("Unexpected layer with compositionType %d", fb_layer->compositionType);
-             continue;
+            ALOGE("Unexpected layer with compositionType %d", fb_layer->compositionType);
+            if (fb_layer->acquireFenceFd != -1) {
+                close(fb_layer->acquireFenceFd);
+            }
+            continue;
         }
 #else
         if (fb_layer->compositionType != HWC_OVERLAY || fb_layer->blending != HWC_BLENDING_NONE) {
-             continue;
+            if (fb_layer->acquireFenceFd != -1) {
+                close(fb_layer->acquireFenceFd);
+            }
+            continue;
         }
 #endif
 
         if (!fb_layer->handle) {
+            if (fb_layer->acquireFenceFd != -1) {
+                close(fb_layer->acquireFenceFd);
+            }
             continue;
         }
 
         //ALOGE("*** %s: %d handle %d", __PRETTY_FUNCTION__, 5, fb_layer->handle->data[0]);
         struct buffer *buf = get_dmabuf_buffer(pdev, drm_handle);
         if (!buf) {
-             ALOGE("Failed to get wl_dmabuf");
-             continue;
+            ALOGE("Failed to get wl_dmabuf");
+            if (fb_layer->acquireFenceFd != -1) {
+               close(fb_layer->acquireFenceFd);
+            }
+            continue;
         }
 
         if (buf->busy) {
+            if (fb_layer->acquireFenceFd != -1) {
+                close(fb_layer->acquireFenceFd);
+            }
             continue;
         }
 
