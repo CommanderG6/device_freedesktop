@@ -267,51 +267,6 @@ etna_device_destroy(struct buffer *buf)
 #endif /* HAVE_LIBDRM_ENTAVIV */
 
 static void
-fill_content(struct buffer *my_buf, uint64_t modifier)
-{
-	int x = 0, y = 0;
-	uint32_t *pix;
-
-	assert(my_buf->mmap);
-
-	if (my_buf->format == DRM_FORMAT_NV12) {
-		if (modifier == DRM_FORMAT_MOD_SAMSUNG_64_32_TILE) {
-			pix = (uint32_t *) my_buf->mmap;
-			for (y = 0; y < my_buf->height; y++)
-				memcpy(&pix[y * my_buf->width / 4],
-				       &nv12_tiled[my_buf->width * y / 4],
-				       my_buf->width);
-		}
-		else if (modifier == DRM_FORMAT_MOD_LINEAR) {
-			uint8_t *pix8;
-			/* first plane: Y (2/3 of the buffer)	*/
-			for (y = 0; y < my_buf->height * 2/3; y++) {
-				pix8 = my_buf->mmap + y * my_buf->stride;
-				for (x = 0; x < my_buf->width; x++)
-					*pix8++ = x % 0xff;
-			}
-			/* second plane (CbCr) is half the size of Y
-			   plane (last 1/3 of the buffer) */
-			for (y = my_buf->height * 2/3; y < my_buf->height; y++) {
-				pix8 = my_buf->mmap + y * my_buf->stride;
-				for (x = 0; x < my_buf->width; x+=2) {
-					*pix8++ = x % 256;
-					*pix8++ = y % 256;
-				}
-			}
-		}
-	}
-	else {
-		for (y = 0; y < my_buf->height; y++) {
-			pix = (uint32_t *)(my_buf->mmap + y * my_buf->stride);
-			for (x = 0; x < my_buf->width; x++)
-				*pix++ = (0xff << 24) | ((x % 256) << 16) |
-					 ((y % 256) << 8) | 0xf0;
-		}
-	}
-}
-
-static void
 drm_device_destroy(struct buffer *buf)
 {
 	buf->dev->device_destroy(buf);
