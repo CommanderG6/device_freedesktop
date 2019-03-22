@@ -399,7 +399,6 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
              buf->release_fence_fd = -1;
          }
          buf->timeline_fd = pdev->timeline_fd;
-         ATRACE_ASYNC_BEGIN("release fence", (int)buf);
 
         struct wl_surface *surface = get_surface(pdev, fb_layer, layer);
         if (!surface) {
