@@ -383,11 +383,23 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
             continue;
         }
 
-        /* To be signaled when the compositor releases the buffer */
-        fb_layer->releaseFenceFd = sw_sync_fence_create(pdev->timeline_fd, "wayland_release", pdev->next_sync_point++);
-        buf->release_fence_fd = dup(fb_layer->releaseFenceFd);
-        buf->timeline_fd = pdev->timeline_fd;
-        ATRACE_ASYNC_BEGIN("release fence", (int)buf);
+
+        /* These layers do not require a releaseFenceFD to be created:
+         * HWC_FRAMEBUFFER, HWC_SIDEBAND
+         * https://android.googlesource.com/platform/hardware/libhardware/+/master/include/hardware/hwcomposer.h#216
+         */
+         if (fb_layer->compositionType != HWC_FRAMEBUFFER &&
+             fb_layer->compositionType != HWC_SIDEBAND)
+         {
+             /* To be signaled when the compositor releases the buffer */
+             fb_layer->releaseFenceFd = sw_sync_fence_create(pdev->timeline_fd, "wayland_release", pdev->next_sync_point++);
+             ALOGE("%s(): fb_layer->releaseFenceFd=%d   fence-sync-point=%d", __func__, fb_layer->releaseFenceFd, pdev->next_sync_point-1);
+             buf->release_fence_fd = fb_layer->releaseFenceFd;
+         } else {
+             buf->release_fence_fd = -1;
+         }
+         buf->timeline_fd = pdev->timeline_fd;
+         ATRACE_ASYNC_BEGIN("release fence", (int)buf);
 
         struct wl_surface *surface = get_surface(pdev, fb_layer, layer);
         if (!surface) {

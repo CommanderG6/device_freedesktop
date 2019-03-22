@@ -95,6 +95,7 @@ buffer_release(void *data, struct wl_buffer *buffer)
    mybuf->busy = false;
    sw_sync_timeline_inc(mybuf->timeline_fd, 1);
    close(mybuf->release_fence_fd);
+   mybuf->release_fence_fd = -1;
    ATRACE_ASYNC_END("release fence", (int)mybuf);
 }
 
