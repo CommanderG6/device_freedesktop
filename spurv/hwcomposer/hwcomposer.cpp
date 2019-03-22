@@ -319,6 +319,7 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
 
     //ALOGE("*** %s: %d", __PRETTY_FUNCTION__, 2);
     hwc_display_contents_1_t* contents = displays[HWC_DISPLAY_PRIMARY];
+    contents->retireFenceFd = sw_sync_fence_create(pdev->timeline_fd, "hwc_contents_release", pdev->next_sync_point);
 
     int err = 0;
     for (size_t layer = 0; layer < contents->numHwLayers; layer++) {
@@ -414,10 +415,13 @@ static int hwc_set(struct hwc_composer_device_1* dev,size_t numDisplays,
         wl_display_flush(pdev->display->display);
     }
 
-#if FENCES
+    /* TODO: According to[1] the contents->retireFenceFd is the responsibility
+     * of SurfaceFlinger to close, but leaving it open is causing a graphical
+     * stall.
+     * [1] https://android.googlesource.com/platform/hardware/libhardware/+/master/include/hardware/hwcomposer.h#333
+     */
     close(contents->retireFenceFd);
     contents->retireFenceFd = -1;
-#endif
 
     return err;
 }
