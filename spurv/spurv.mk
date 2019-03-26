@@ -61,7 +61,7 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     debug.sf.nobootanimation=1 \
     qemu.hw.mainkeys=1 \
     dalvik.vm.heapsize=36m \
-    spurv.application=fishnoodle.canabalt \
+    spurv.application=org.jfedor.frozenbubble \
     spurv.display_width=1920 \
     spurv.display_height=1080 \
 

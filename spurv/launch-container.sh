@@ -1,12 +1,11 @@
 #!/bin/bash -x
 
-APP=fishnoodle.canabalt
+APP=org.jfedor.frozenbubble
 WIDTH=1920
 HEIGHT=1080
 
 for arg in "$@"; do
   case "$1" in
-    "--angry") APP=com.rovio.angrybirds ;;
     "--width") WIDTH="$2" HEIGHT=$(bc <<< "$WIDTH * 0.5625 / 1") ;;
   esac
   shift

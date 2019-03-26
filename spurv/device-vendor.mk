@@ -60,8 +60,6 @@ PRODUCT_PACKAGES += \
     android.hardware.bluetooth@1.0-service.btlinux \
 
 PRODUCT_PACKAGES += \
-    com.rovio.angrybirds \
-    AutoLauncher \
-    fishnoodle.canabalt \
-    com.tripadvisor.tripadvisor
+    org.jfedor.frozenbubble \
+    AutoLauncher
 
