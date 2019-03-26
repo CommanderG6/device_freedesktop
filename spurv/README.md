@@ -5,7 +5,7 @@
 Install repo as per https://source.android.com/setup/build/downloading
 
     repo init -u https://android.googlesource.com/platform/manifest -b android-9.0.0_r10
-    git clone https://gitlab.collabora.com/zodiac/android_manifest.git .repo/local_manifests/
+    git clone https://gitlab.collabora.com/spurv/android_manifest.git .repo/local_manifests/
     repo sync -j15
     . build/envsetup.sh
     lunch spurv-eng
@@ -13,7 +13,7 @@ Install repo as per https://source.android.com/setup/build/downloading
 
 ## Kernel
 
-    git clone https://gitlab.collabora.com/zodiac/linux.git -b android-container
+    git clone https://gitlab.collabora.com/spurv/linux.git -b android-container
     cd linux
     sh ../aosp/device/freedesktop/spurv/build-kernel.sh
 
